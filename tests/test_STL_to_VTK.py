@@ -30,5 +30,18 @@ class STLtoVTKChecks(unittest.TestCase):
         # Convert to VTK and save in case directory.
         v.convert_stl_to_vtk()
 
+        # Check if the folder exists
+        self.assertTrue(os.path.exists(case_dir + 'results/'))
+
+        # Check that folder is not empty
+        files_in_folder = os.listdir(case_dir + 'results/')
+        self.assertTrue(files_in_folder, f"Folder {case_dir + 'results/'} is empty")
+
+        # Check that the file type is correct
+        for file_name in files_in_folder:
+            self.assertTrue(file_name.endswith('.vtu'), f"File {file_name} in folder {case_dir + 'results/'} does not have '.vtu' extension")
+
+
+
 if __name__ == '__main__':
     unittest.main()
