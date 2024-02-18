@@ -11,6 +11,7 @@ from stl import mesh
 
 from pyrpod.LogisticsModule import LogisticsModule
 from pyrpod.MissionPlanner import MissionPlanner
+from pyrpod.RarefiedPlumeGasKinetics import SimplifiedGasKinetics
 
 from pyrpod.file_print import print_JFH
 from tqdm import tqdm
@@ -364,6 +365,7 @@ class RPOD (MissionPlanner):
                 )
             
             # print(self.vv.mesh)
+
             # print(self.case_dir + self.config['stl']['vv'])
 
             path_to_vtk = self.case_dir + "results/jfh/firing-" + str(firing) + ".vtu" 
@@ -411,16 +413,30 @@ class RPOD (MissionPlanner):
 
         # Initiate array containing cummulative strikes. 
         cum_strikes = np.zeros(len(target.vectors))
+
+        # Initiate array containing cummulative strikes. 
+        cum_pressures = np.zeros(len(target.vectors))
+
+        # Initiate array containing cummulative heatflux. 
+        cum_heat_flux = np.zeros(len(target.vectors))
+
         # print(len(cum_strikes))
 
 
         # Loop through each firing in the JFH.
         for firing in range(len(self.jfh.JFH)):
+
         # for firing in tqdm(range(len(self.jfh.JFH)), desc='Processing firings'):
             # print('firing =', firing+1)
 
             # reset strikes for each firing
             strikes = np.zeros(len(target.vectors))
+
+            # reset pressures for each firing
+            pressures = np.zeros(len(target.vectors))
+
+            # reset pressures for each firing
+            heat_flux = np.zeros(len(target.vectors))
 
             # Save active thrusters for current firing. 
             thrusters = self.jfh.JFH[firing]['thrusters']
@@ -428,6 +444,7 @@ class RPOD (MissionPlanner):
              
             # Load visiting vehicle position and orientation
             vv_pos = self.jfh.JFH[firing]['xyz']
+
             vv_orientation = np.array(self.jfh.JFH[firing]['dcm']).transpose()
 
             # Calculate strikes for active thrusters. 
@@ -514,6 +531,18 @@ class RPOD (MissionPlanner):
                         cum_strikes[i] = cum_strikes[i] + 1
                         strikes[i] = 1
 
+                        if self.config['pm']['kinetics'] == "Simplified":
+                            T_w = float(self.config['tv']['surface_temp'])
+                            sigma = float(self.config['tv']['sigma'])
+                            thruster_metrics = self.vv.thruster_metrics[self.vv.thruster_data[thruster_id]['type'][0]]
+                            simple_plume = SimplifiedGasKinetics(norm_distance, theta, thruster_metrics, T_w, sigma)
+                            pressure = simple_plume.get_pressure()
+                            pressures[i] += pressure
+                            cum_pressures[i] += pressure
+
+                            heat_flux_cur = simple_plume.get_heat_flux()
+                            heat_flux[i] += heat_flux_cur
+                            cum_heat_flux[i] += heat_flux_cur
                         # print("unit plume normal", unit_plume_normal)
  
                         # print("unit distance", unit_distance)
@@ -528,6 +557,12 @@ class RPOD (MissionPlanner):
                 "strikes": strikes,
                 "cum_strikes": cum_strikes
             }
+
+            if self.config['pm']['kinetics'] != 'None':
+                cellData["pressures"] = pressures
+                cellData["cum_pressures"] = cum_pressures
+                cellData["heat_flux"] = heat_flux
+                cellData["cum_heat_flux"] = cum_heat_flux
 
             path_to_vtk = self.case_dir + "results/strikes/firing-" + str(firing) + ".vtu" 
 
@@ -675,12 +710,18 @@ class RPOD (MissionPlanner):
         '''
 
         # t_values = np.linspace(0,2*np.pi,100)
-        t_values = np.linspace(0, 50, 20)
+        t_values = np.linspace(0, 25, 100)
 
         # Symbolic Calculations of tangent and normal unit vectors
         r = r_of_t
         rprime = [sp.diff(r[0],t), sp.diff(r[1],t), sp.diff(r[2],t)]
-        tanvector = [rprime[0]/make_norm(rprime), rprime[1]/make_norm(rprime), rprime[2]/make_norm(rprime)]
+
+        # print('1', rprime[0]/make_norm(rprime))
+        # print('2', rprime[1]/make_norm(rprime))
+        # print('3', rprime[2]/make_norm(rprime))
+        # tanvector = [rprime[0]/make_norm(rprime), rprime[1]/make_norm(rprime), rprime[2]/make_norm(rprime)]
+        tanvector = [0, 0, -0.25]
+
         tanprime = [sp.diff(tanvector[0],t), sp.diff(tanvector[1],t), sp.diff(tanvector[2],t)]
         normalvector = [tanprime[0]/make_norm(tanprime), tanprime[1]/make_norm(tanprime), tanprime[1]/make_norm(tanprime)]
         tan_vector_functions = [sp.lambdify(t, tanvector[0]),sp.lambdify(t, tanvector[1]), sp.lambdify(t, tanvector[2])]
@@ -689,7 +730,9 @@ class RPOD (MissionPlanner):
 
         # Save data of evaluated position and velocity functions. 
         x, y, z = [value_functions[0](t_values), value_functions[1](t_values), value_functions[2](t_values)]
-        dx, dy, dz = [tan_vector_functions[0](t_values), tan_vector_functions[1](t_values), tan_vector_functions[2](t_values)]
+        dx = np.array(tan_vector_functions[0](t_values))
+        dy = np.array(tan_vector_functions[1](t_values))
+        dz = np.array(tan_vector_functions[2](t_values))
 
         # print(type(dx), type(dy), type(dz))
 
@@ -702,7 +745,7 @@ class RPOD (MissionPlanner):
         if type(x) == int:
             x = np.full(t_values.size, x)
 
-        if type(dx) == int or dx.size == 1:
+        if dx.size == 1:
             # print('dx is contant')
             # print(dx)
             dx = np.full(t_values.size, dx)
@@ -710,14 +753,15 @@ class RPOD (MissionPlanner):
 
         if type(y) == int:
             y = np.full(t_values.size, y)
-        if type(dy) == int or dy.size == 1:
+        if dy.size == 1:
             # print('dy is contant')
             # print(dy)
             dy = np.full(t_values.size, dy)
         
         if type(z) == int:
             z = np.full(t_values.size, z)
-        if type(dz) == int or dz.size == 1:
+
+        if dz.size == 1:
             # print('dz is contant')
             # print(dz)
             dz = np.full(t_values.size, dz)
