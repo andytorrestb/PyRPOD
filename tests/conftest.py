@@ -13,6 +13,17 @@ GROUPS = ("mdao", "mission", "plume", "rpod")
 # fixed or removed outright.
 collect_ignore = ["old", "test_case_25.py", "rpod_verification_test_05.py"]
 
+# Manual-run verification FIGURE scripts (design decision D5): plume
+# plume_verification_test_04..40 reproduce Cai & Wang 2012 / Cai 2016 paper
+# figures when run directly (`python tests/plume/plume_verification_test_NN.py`)
+# and define no pytest tests -- collecting them only imports dead weight and
+# muddies the "verification" taxonomy. Exclude them so the pytest suite holds
+# real tests only; _01..03 are genuine pytest verification tests and stay
+# collected. Run a figure script directly to regenerate its figure.
+collect_ignore += [
+    f"plume/plume_verification_test_{n:02d}.py" for n in range(4, 41)
+]
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _run_from_tests_dir():
