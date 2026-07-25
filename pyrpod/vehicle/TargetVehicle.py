@@ -1,6 +1,12 @@
+import logging
+
 from stl import mesh
 from pyrpod.vehicle.Vehicle import Vehicle
+from pyrpod.logging_utils import log_asset, log_array_summary
 from pyrpod.util.io.fs import resolve_asset_path
+
+logger = logging.getLogger(__name__)
+
 
 class TargetVehicle(Vehicle):
     """
@@ -47,6 +53,12 @@ class TargetVehicle(Vehicle):
         self.mesh = next(meshes)
         #self.mesh = next(meshes)
         self.path_to_stl = path_to_stl
+
+        log_asset("target-vehicle STL", self.config['tv']['stl'], path_to_stl,
+                  self.case_dir, logger=logger)
+        logger.info("Target vehicle geometry loaded: mesh_faces=%d",
+                    len(self.mesh.vectors))
+        log_array_summary(logger, "target_mesh_vectors", self.mesh.vectors)
         return
 
     def set_stl_elements(self):
