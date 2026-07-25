@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -5,7 +6,10 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SHARED_DATA_DIR = _REPO_ROOT / "data"
 
-def resolve_asset_path(case_dir, subdir, filename, shared_subdir=None):
+log = logging.getLogger(__name__)
+
+def resolve_asset_path(case_dir, subdir, filename, shared_subdir=None, *,
+                       required=True):
     """
     Resolve the path to a shared data asset (STL, JFH, TCD, flight plan, ...).
 
@@ -28,21 +32,43 @@ def resolve_asset_path(case_dir, subdir, filename, shared_subdir=None):
         differs from `subdir` (e.g. flight plans live under a case's
         `jfh/` folder but under `data/flight_plan/`). Defaults to `subdir`.
 
+    required : bool, optional
+        When True (default) a missing asset raises FileNotFoundError naming
+        both searched paths. Set False to get the case-local path back for a
+        file that is expected not to exist yet (e.g. an output target).
+
+    Precedence
+    ----------
+    The case-local copy (``case_dir/subdir/filename``) always wins over the
+    shared ``data/`` copy, so a case can override a shared asset by keeping
+    its own file, and two cases may carry same-named files with different
+    contents. The chosen path is logged at DEBUG level.
+
     Returns
     -------
     str
-        Path to the resolved asset. Prefers the case-local path; falls back
-        to the shared data directory path even if neither exists, so
-        callers get a sensible path in error messages.
+        Path to the resolved asset (case-local if present, else shared).
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``required`` and the asset exists in neither location.
     """
     local_path = os.path.join(case_dir, subdir, filename)
     if os.path.exists(local_path):
+        log.debug("asset %r resolved to case-local %s", filename, local_path)
         return local_path
 
     shared_path = str(_SHARED_DATA_DIR / (shared_subdir or subdir) / filename)
     if os.path.exists(shared_path):
+        log.debug("asset %r not case-local; resolved to shared %s",
+                  filename, shared_path)
         return shared_path
 
+    if required:
+        raise FileNotFoundError(
+            f"asset {filename!r} not found: looked for case-local "
+            f"{local_path!r} then shared {shared_path!r}")
     return local_path
 
 def ensure_dir(path):

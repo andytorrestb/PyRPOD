@@ -999,10 +999,12 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             #             failed_constraints = 1
 
 
-            path_to_vtk = self.environment.case_dir + "results/strikes/firing-" + str(firing)
+            # convert_stl_to_vtk_strikes() prepends case_dir + "results/", so
+            # pass a path relative to that. Previously the full case_dir path
+            # was passed here and prepended again, producing a doubled
+            # case_dir/results/case_dir/results/strikes/ output tree.
+            path_to_vtk = "strikes/firing-" + str(firing)
 
-            # print(cellData)
-            # input()
             self.target.convert_stl_to_vtk_strikes(path_to_vtk, cellData.copy(), target)
     
         # if self.environment.config['pm']['kinetics'] != 'None' and checking_constraints:
