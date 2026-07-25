@@ -8,10 +8,6 @@
 # ========================
 # Test case to analyze Keep Out Zone Impingement. (WIP)
 
-import logging
-logging.basicConfig(filename='rpod_integration_test_03.log', level=logging.INFO, format='%(message)s')
-
-
 import unittest, os, sys
 
 from pyrpod.vehicle import LogisticsModule, TargetVehicle
@@ -83,7 +79,7 @@ class KeepOutZoneChecks(unittest.TestCase):
                             '10':  538.0
         }
 
-        file_path = 'rpod/rpod_int_test_03_expected_strikes.log'
+        file_path = 'rpod/rpod_int_test_03_expected_strikes.txt'
         expected_strike_ids = {}
         with open(file_path, 'r') as file:
             file_content = file.readlines()

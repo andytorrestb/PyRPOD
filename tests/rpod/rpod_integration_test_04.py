@@ -1,6 +1,3 @@
-import logging
-logging.basicConfig(filename='rpod_integration_test_04.log', level=logging.INFO, format='%(message)s')
-
 # Andy Torres, Nicholas A. Palumbo
 # Last Changed: 03-16-24
 
@@ -51,7 +48,7 @@ class HollowCubeChecks(unittest.TestCase):
 
     # 3. Assert
         # Read in expected strikes from text file.
-        file_path = 'rpod/rpod_int_test_04_expected_strikes.log'
+        file_path = 'rpod/rpod_int_test_04_expected_strikes.txt'
         expected_strikes = {}
         with open(file_path, 'r') as file:
             file_content = file.readlines()

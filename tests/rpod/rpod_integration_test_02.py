@@ -1,6 +1,3 @@
-import logging
-logging.basicConfig(filename='rpod_integration_test_02.log', level=logging.INFO, format='%(message)s')
-
 # Andy Torres, Nicholas Palumbo
 # Last Changed: 11-10-24
 
@@ -101,7 +98,7 @@ class OneDimTransApproachChecks(unittest.TestCase):
         }
 
         # Read in expected strikes from text file.
-        file_path = 'rpod/rpod_int_test_02_expected_strikes.log'
+        file_path = 'rpod/rpod_int_test_02_expected_strikes.txt'
         expected_strike_ids = {}
         with open(file_path, 'r') as file:
             file_content = file.readlines()
