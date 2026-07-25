@@ -1,6 +1,3 @@
-import logging
-logging.basicConfig(filename='rpod_integration_test_01.log', level=logging.INFO, format='%(message)s')
-
 # Andy Torres, Nicholas Palumbo
 # Last Changed: 11-17-24
 
@@ -102,7 +99,7 @@ class BaseCaseChecks(unittest.TestCase):
         }
 
         # Read in expected strikes from text file.
-        file_path = 'rpod/rpod_int_test_01_expected_strikes.log'
+        file_path = 'rpod/rpod_int_test_01_expected_strikes.txt'
         expected_strike_ids = {}
         with open(file_path, 'r') as file:
             file_content = file.readlines()
@@ -127,9 +124,6 @@ class BaseCaseChecks(unittest.TestCase):
 
                     # logging.info(str(i))
                     self.assertIn(i, expected_strike_ids[n_firing])
-            # Development statements used to write comparison entries in expected_strikes
-            string = '\''+str(n_firing)+'\': ' + ' ' +str(strikes[n_firing]['cum_strikes'].sum()) +','
-            logging.info(string)
 
             # Number of strikes for a given time step.
             n_strikes = strikes[n_firing]['strikes'].sum()

@@ -5,10 +5,10 @@ from matplotlib import pyplot as plt
 from mpl_toolkits import mplot3d
 import os
 import configparser
-from pyrpod.logging_utils import get_logger
+import logging
 from pyrpod.util.io.fs import resolve_asset_path
 
-logger = get_logger("pyrpod.vehicle.LogisticsModule")
+logger = logging.getLogger(__name__)
 
 class LogisticsModule(VisitingVehicle):
     """

@@ -2,10 +2,14 @@ from stl import mesh
 import numpy as np
 import os
 import configparser
+import logging
 
 from pyevtk.vtk import VtkTriangle, VtkQuad
 from pyrpod.util.stl.stl import convert_stl_to_vtk
+from pyrpod.logging_utils import log_asset
 from pyrpod.util.io.fs import resolve_asset_path
+
+logger = logging.getLogger(__name__)
 
 class Vehicle:
     """
@@ -50,6 +54,10 @@ class Vehicle:
 
         self.mesh = mesh.Mesh.from_file(path_to_stl)
         self.path_to_stl = path_to_stl
+        log_asset("vehicle STL", self.config['vv']['stl_lm'], path_to_stl,
+                  self.case_dir, logger=logger)
+        logger.info("Vehicle geometry loaded: mesh_faces=%d",
+                    len(self.mesh.vectors))
         return
 
     def convert_stl_to_vtk_strikes(self, path_to_vtk, cellData, mesh):

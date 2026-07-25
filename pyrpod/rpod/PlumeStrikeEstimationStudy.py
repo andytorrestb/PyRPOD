@@ -1,6 +1,9 @@
 import numpy as np
 import os
 import math
+import logging
+import time
+import tracemalloc
 
 from stl import mesh
 import matplotlib.pyplot as plt
@@ -14,10 +17,14 @@ from pyrpod.util.io.file_print import print_1d_JFH
 from pyrpod.util.io.fs import ensure_dir, resolve_asset_path
 from pyrpod.util.stl.stl import load_stl, transform_mesh
 
-from tqdm import tqdm
 from queue import Queue
 
-from pyrpod.logging_utils import get_logger
+from pyrpod.logging_utils import (
+    get_active_session,
+    get_settings,
+    log_array_summary,
+    performance_logging_enabled,
+)
 from pyrpod.util.math.transform import rotation_matrix_from_vectors
 
 # New modular imports for refactor
@@ -34,7 +41,24 @@ from pyrpod.plume.PlumeStrikeCalculator import (
     run_parallel_plume_strikes,
 )
 
-logger = get_logger("pyrpod.rpod.PlumeStrikeEstimationStudy")
+logger = logging.getLogger(__name__)
+
+
+def _log_jfh_generation_complete(jfh_path, n_firings, gen_start):
+    """Log completion of a JFH-generation step (path, size, count, runtime).
+
+    Never raises: JFH generation is a scientific write, so an observability
+    failure must not mask a successful (or failed) file write.
+    """
+    gen_s = time.perf_counter() - gen_start
+    try:
+        size = os.path.getsize(jfh_path)
+    except OSError:
+        size = -1
+    logger.info("JFH generation completed: firings=%d output=%s "
+                "output_size_bytes=%d generation_time_s=%.4f",
+                n_firings, os.path.abspath(jfh_path), size, gen_s)
+
 
 class PlumeStrikeEstimationStudy (MissionPlanner):
     """
@@ -343,16 +367,11 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         
         # Create results directory if it doesn't already exist.
         results_dir = self.environment.case_dir + 'results'
-        if not os.path.isdir(results_dir):
-            # print("results dir doesn't exist")
-            os.mkdir(results_dir)
-
+        ensure_dir(results_dir)
 
         if not trade_study:
             results_dir = results_dir + "/jfh"
-            if not os.path.isdir(results_dir):
-                #print("results dir doesn't exist")
-                os.mkdir(results_dir)
+            ensure_dir(results_dir)
 
         if trade_study:
             v_o = ['vo_0', 'vo_1', 'vo_2', 'vo_3', 'vo_4']
@@ -360,9 +379,12 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             for v in v_o:
                 for cant in cants:
                     results_dir_case = results_dir + "/" + v + '_' + cant
-                    if not os.path.isdir(results_dir_case):
-                        #print("results dir doesn't exist")
-                        os.mkdir(results_dir_case)
+                    ensure_dir(results_dir_case)
+
+        logger.info("JFH visualization export started: firings=%d "
+                    "trade_study=%s", len(self.jfh.JFH), trade_study)
+        viz_files_written = 0
+        viz_failures = 0
 
         # Save STL surface of target vehicle to local variable.
         target = self.target.mesh
@@ -456,9 +478,26 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
                 path_to_stl = os.path.join(self.environment.case_dir, "results", self.get_case_key(), "jfh", f"firing-{firing}.stl")
 
             # self.vv.convert_stl_to_vtk(path_to_vtk, mesh =VVmesh)
-            self.viz.export_firing(VVmesh, path_to_stl)
+            # The JFH trajectory STLs are an optional visualization aid (viewed
+            # in ParaView); a write failure must warn and continue rather than
+            # abort the run, since the numerical strike calculation does not
+            # depend on them.
+            try:
+                self.viz.export_firing(VVmesh, path_to_stl)
+                viz_files_written += 1
+                logger.debug("Wrote JFH firing artifact: %s", path_to_stl)
+            except Exception:
+                viz_failures += 1
+                logger.warning("Optional JFH visualization write failed for "
+                               "firing %d (%s); continuing.", firing,
+                               path_to_stl, exc_info=True)
 
-    def visualize_sweep(self, config_iter): 
+        jfh_export_dir = os.path.join(self.environment.case_dir, "results", "jfh")
+        logger.info("Completed JFH visualization export: files_written=%d "
+                    "failures=%d directory=%s", viz_files_written,
+                    viz_failures, jfh_export_dir)
+
+    def visualize_sweep(self, config_iter):
         """
             Creates visualization data for the trajectory of the proposed RPOD analysis.
 
@@ -488,14 +527,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         # Create results directory if it doesn't already exist.
         results_dir = self.environment.case_dir + 'results'
-        if not os.path.isdir(results_dir):
-            # print("results dir doesn't exist")
-            os.mkdir(results_dir)
+        ensure_dir(results_dir)
 
         results_dir = results_dir + "/jfh"
-        if not os.path.isdir(results_dir):
-            # print("results dir doesn't exist")
-            os.mkdir(results_dir)
+        ensure_dir(results_dir)
 
         # Save STL surface of target vehicle to local variable.
         target = self.target.mesh
@@ -504,7 +539,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         for firing in range(len(self.jfh.JFH)):
             # print('firing =', firing+1)
 
-            # Save active thrusters for current firing. 
+            # Save active thrusters for current firing.
             thrusters = self.jfh.JFH[firing]['thrusters']
             # print("thrusters is", thrusters)
              
@@ -811,6 +846,94 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             return False, 1
         return True, workers
 
+    def _validate_plume_strike_inputs(self):
+        """Fail-fast validation of the inputs a plume-strike run requires.
+
+        Logs an ERROR naming the case, the offending section/key, and any
+        searched context, then raises a clear exception on the first missing
+        required input rather than silently returning ``None``. Conditionally
+        required inputs (TDF, surface temperature, sigma, thruster metrics) are
+        enforced only when kinetics is enabled.
+
+        Returns
+        -------
+        bool
+            Whether plume kinetics is enabled for this run.
+        """
+        config = self.environment.config
+        case_dir = self.environment.case_dir
+
+        def require_option(section, key):
+            if not config.has_option(section, key):
+                logger.error("Missing required config [%s] %s (case %s)",
+                             section, key, case_dir)
+                raise KeyError(
+                    f"Missing required config [{section}] {key} (case "
+                    f"{case_dir})")
+            return config[section][key]
+
+        require_option('tv', 'stl')
+        require_option('jfh', 'jfh')
+        require_option('tcd', 'tcf')
+        kinetics = require_option('pm', 'kinetics')
+        require_option('plume', 'radius')
+        require_option('plume', 'wedge_theta')
+
+        target = getattr(self, 'target', None)
+        if target is None or getattr(target, 'mesh', None) is None:
+            logger.error("Target vehicle mesh not loaded (case %s)", case_dir)
+            raise ValueError(
+                f"Target vehicle mesh not loaded (case {case_dir}); call "
+                "TargetVehicle.set_stl() before the plume-strike run.")
+        if len(target.mesh.vectors) == 0:
+            logger.error("Target mesh is empty (case %s)", case_dir)
+            raise ValueError(f"Target mesh is empty (case {case_dir}).")
+
+        jfh = getattr(self, 'jfh', None)
+        if jfh is None or getattr(jfh, 'JFH', None) is None:
+            logger.error("JFH not loaded (case %s)", case_dir)
+            raise ValueError(
+                f"JFH not loaded (case {case_dir}); call "
+                "JetFiringHistory.read_jfh() with a valid [jfh] jfh.")
+        if len(jfh.JFH) == 0:
+            logger.error("JFH is empty (case %s)", case_dir)
+            raise ValueError(f"JFH is empty (case {case_dir}).")
+
+        thruster_data = getattr(self.vv, 'thruster_data', None)
+        if not thruster_data:
+            logger.error("Thruster configuration not loaded (case %s)", case_dir)
+            raise ValueError(
+                f"Thruster configuration not loaded (case {case_dir}); call "
+                "set_thruster_config() before the plume-strike run.")
+
+        # Every JFH thruster index must map to a configured thruster; the
+        # numeric index is 1-based over the thruster configuration order.
+        n_configured = len(thruster_data)
+        for firing_idx, step in enumerate(jfh.JFH):
+            for thr in step['thrusters']:
+                if not (1 <= int(thr) <= n_configured):
+                    logger.error(
+                        "JFH firing %d references invalid thruster index %s "
+                        "(configured thrusters: %d, case %s)",
+                        firing_idx, thr, n_configured, case_dir)
+                    raise ValueError(
+                        f"JFH firing {firing_idx} references invalid thruster "
+                        f"index {thr}; case {case_dir} configures "
+                        f"{n_configured} thrusters.")
+
+        kinetics_on = kinetics != 'None'
+        if kinetics_on:
+            require_option('tcd', 'tdf')
+            require_option('tv', 'surface_temp')
+            require_option('tv', 'sigma')
+            if getattr(self.vv, 'thruster_metrics', None) is None:
+                logger.error("Kinetics enabled but thruster metrics (TDF) not "
+                             "loaded (case %s)", case_dir)
+                raise ValueError(
+                    f"Kinetics enabled but thruster metrics not loaded (case "
+                    f"{case_dir}); call set_thruster_metrics().")
+        return kinetics_on
+
     def jfh_plume_strikes(self, parallel=None, workers=None):
         """
             Calculates number of plume strikes according to data provided for RPOD analysis.
@@ -848,6 +971,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
                 enabled, pressures, max_pressures, shear_stress, max_shears,
                 heat_flux_rate, heat_flux_load, cum_heat_flux_load.
         """
+        # Fail-fast validation of every required input before doing any work
+        # or writing any output. Returns whether kinetics is enabled.
+        kinetics_on = self._validate_plume_strike_inputs()
+
         # Prepare results directories and target data
         self.create_results_dir()
         target = self.target.mesh
@@ -855,9 +982,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         # The target is stationary for the whole run, so face centroids are
         # computed once here and reused for every firing.
         target_centroids = compute_face_centroids(target.vectors)
+        log_array_summary(logger, "target_unit_normals", target_normals)
+        log_array_summary(logger, "target_face_centroids", target_centroids)
 
         # Initialize cumulative arrays
-        kinetics_on = self.environment.config['pm']['kinetics'] != 'None'
         if kinetics_on:
             cum_strikes, max_pressures, max_shears, cum_heat_flux_load = self.set_strike_fields(target)
         else:
@@ -879,13 +1007,44 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         parallel_enabled, n_workers = self._resolve_parallel_options(parallel, workers, n_firings)
 
+        # Run-scoped logging settings (progress cadence, performance toggle).
+        settings = get_settings()
+        progress_every = max(1, settings.progress_every_n_firings)
+        plume_model = self.environment.config['pm']['kinetics']
+        plume_radius = float(self.environment.config['plume']['radius'])
+        wedge_theta = float(self.environment.config['plume']['wedge_theta'])
+        exec_mode = 'parallel' if parallel_enabled else 'serial'
+
+        logger.info(
+            "Plume-strike run started: firings=%d target_faces=%d kinetics=%s "
+            "plume_model=%s plume_radius=%s wedge_theta=%s mode=%s workers=%d "
+            "progress_every_n_firings=%d",
+            n_firings, len(target.vectors), kinetics_on, plume_model,
+            plume_radius, wedge_theta, exec_mode,
+            n_workers if parallel_enabled else 1, progress_every,
+        )
+
+        # Performance/memory tracking (standard library only). tracemalloc is
+        # engaged solely for an explicitly configured run, never merely because
+        # this method was called, so unit tests are not slowed.
+        perf_on = performance_logging_enabled()
+        tracemalloc_started_here = False
+        if perf_on and not tracemalloc.is_tracing():
+            tracemalloc.start()
+            tracemalloc_started_here = True
+        run_wall_start = time.perf_counter()
+        run_cpu_start = time.process_time()
+        fallback_occurred = False
+        worker_meta = None
+        overall_max_heat_flux_rate = 0.0
+
         # Optionally compute independent per-firing results in worker
         # processes. Workers receive only plain serializable inputs (arrays,
         # dicts, config scalars) — never the study/vehicle/environment objects.
         per_firing_results = None
         if parallel_enabled:
             try:
-                per_firing_results = run_parallel_plume_strikes(
+                per_firing_results, worker_meta = run_parallel_plume_strikes(
                     jfh_steps=steps,
                     face_centroids=target_centroids,
                     target_unit_normals=target_normals,
@@ -893,17 +1052,23 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
                     thruster_metrics=getattr(self.vv, 'thruster_metrics', None),
                     plume_params=extract_plume_params(self.environment),
                     workers=n_workers,
+                    return_meta=True,
                 )
+                logger.info("Parallel execution completed across %d workers.",
+                            n_workers)
             except Exception as exc:
                 logger.warning(
                     "Parallel plume strike execution failed (%s: %s); "
                     "falling back to serial execution.",
-                    type(exc).__name__, exc,
+                    type(exc).__name__, exc, exc_info=True,
                 )
                 per_firing_results = None
+                worker_meta = None
+                fallback_occurred = True
 
         # Loop through each firing in the JFH and delegate to impingement module
         for firing in range(n_firings):
+            firing_wall_start = time.perf_counter()
             step = steps[firing]
 
             if per_firing_results is not None:
@@ -1006,11 +1171,101 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             path_to_vtk = "strikes/firing-" + str(firing)
 
             self.target.convert_stl_to_vtk_strikes(path_to_vtk, cellData.copy(), target)
-    
+            logger.debug("Wrote firing artifact: %s", os.path.join(
+                self.environment.case_dir, "results", path_to_vtk + ".vtu"))
+
+            # Detailed per-firing array diagnostics (DEBUG only).
+            log_array_summary(logger, f"firing_{firing + 1}_strikes", strikes)
+
+            # Track overall max heat-flux RATE for the completion summary. This
+            # is a scalar used only for logging; it is never written to output
+            # nor added to firing_data, so numerical results are unchanged.
+            if kinetics_on:
+                overall_max_heat_flux_rate = max(
+                    overall_max_heat_flux_rate, float(heat_flux_rate.max()))
+
+            # Configured progress reporting: every Nth firing and the final one.
+            if logger.isEnabledFor(logging.INFO) and (
+                    (firing + 1) % progress_every == 0 or firing == n_firings - 1):
+                firing_wall_s = time.perf_counter() - firing_wall_start
+                struck_faces = int(np.count_nonzero(strikes))
+                pct = 100.0 * (firing + 1) / n_firings
+                fields = [
+                    f"progress_pct={pct:.1f}",
+                    f"jfh_id={self.jfh.JFH[firing]['nt']}",
+                    f"sim_time_s={step['t']}",
+                    f"thrusters={list(step['thrusters'])}",
+                    f"struck_faces={struck_faces}",
+                ]
+                if kinetics_on:
+                    fields += [
+                        f"max_pressure_pa={float(result['pressures'].max()):.6g}",
+                        f"max_shear_pa={float(result['shear_stress'].max()):.6g}",
+                        f"max_heat_flux_w_m2={float(result['heat_flux_rate'].max()):.6g}",
+                        f"max_heat_flux_load_j_m2={float(result['heat_flux_load'].max()):.6g}",
+                    ]
+                if worker_meta is not None and worker_meta[firing] is not None:
+                    wm = worker_meta[firing]
+                    fields += [f"worker_pid={wm['pid']}",
+                               f"wall_time_s={wm['wall_time_s']:.4f}"]
+                else:
+                    fields += [f"worker_pid={os.getpid()}",
+                               f"wall_time_s={firing_wall_s:.4f}"]
+                tracked_bytes = cum_strikes.nbytes
+                if kinetics_on:
+                    tracked_bytes += (max_pressures.nbytes + max_shears.nbytes
+                                      + cum_heat_flux_load.nbytes)
+                fields.append(
+                    f"tracked_array_memory_mb={tracked_bytes / 1e6:.4f}")
+                logger.info("Firing %d/%d completed: %s",
+                            firing + 1, n_firings, " ".join(fields))
+
         # if self.environment.config['pm']['kinetics'] != 'None' and checking_constraints:
         #     if not failed_constraints:
         #         constraint_file.write(f"All impingement constraints met.")
         #     # constraint_file.close()
+
+        # Completion summary (INFO).
+        run_wall_s = time.perf_counter() - run_wall_start
+        run_cpu_s = time.process_time() - run_cpu_start
+        peak_memory_mb = None
+        if perf_on and tracemalloc.is_tracing():
+            _current, peak_bytes = tracemalloc.get_traced_memory()
+            peak_memory_mb = peak_bytes / 1e6
+            if tracemalloc_started_here:
+                tracemalloc.stop()
+
+        tracked_bytes = cum_strikes.nbytes
+        if kinetics_on:
+            tracked_bytes += (max_pressures.nbytes + max_shears.nbytes
+                              + cum_heat_flux_load.nbytes)
+        run_status = 'successful_with_warning' if fallback_occurred else 'successful'
+        summary = {
+            'firings_completed': n_firings,
+            'total_struck_face_events': float(cum_strikes.sum()),
+            'unique_struck_faces': int(np.count_nonzero(cum_strikes)),
+            'wall_time_s': round(run_wall_s, 3),
+            'cpu_time_s': round(run_cpu_s, 3),
+            'avg_wall_time_s_per_firing': (
+                round(run_wall_s / n_firings, 4) if n_firings else 0.0),
+            'tracked_array_memory_mb': round(tracked_bytes / 1e6, 4),
+            'output_artifacts': n_firings,
+            'execution_mode': (
+                'parallel' if (parallel_enabled and not fallback_occurred)
+                else 'serial'),
+            'fallback_occurred': fallback_occurred,
+            'run_status': run_status,
+        }
+        if kinetics_on:
+            summary['max_pressure_pa'] = f"{float(max_pressures.max()):.6g}"
+            summary['max_shear_pa'] = f"{float(max_shears.max()):.6g}"
+            summary['max_heat_flux_w_m2'] = f"{overall_max_heat_flux_rate:.6g}"
+            summary['max_heat_flux_load_j_m2'] = (
+                f"{float(cum_heat_flux_load.max()):.6g}")
+        if peak_memory_mb is not None:
+            summary['python_peak_memory_mb'] = round(peak_memory_mb, 3)
+        logger.info("Plume-strike run completed: %s",
+                    " ".join(f"{k}={v}" for k, v in summary.items()))
 
         return firing_data
 
@@ -1170,8 +1425,13 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         else:
             jfh_path = self.environment.case_dir + 'jfh/' + self.get_case_key() + '.A'
 
+        logger.info("JFH generation started (1D n-fire approach): "
+                    "v_ida_m_s=%s v_o_m_s=%s r_o_m=%s n_firings=%s",
+                    v_ida, v_o, r_o, n_firings)
+        gen_start = time.perf_counter()
         os.makedirs(os.path.dirname(jfh_path), exist_ok=True)
         write_jfh(t_values, r, rot, jfh_path, mode="1d")
+        _log_jfh_generation_complete(jfh_path, len(t_values), gen_start)
 
 
     def print_jfh_1d_approach(self, v_ida, v_o, r_o, trade_study = False):
@@ -1227,8 +1487,12 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         else:
             jfh_path = self.environment.case_dir + 'jfh/' + self.get_case_key() + '.A'
 
+        logger.info("JFH generation started (1D approach): "
+                    "v_ida_m_s=%s v_o_m_s=%s r_o_m=%s", v_ida, v_o, r_o)
+        gen_start = time.perf_counter()
         os.makedirs(os.path.dirname(jfh_path), exist_ok=True)
         write_jfh(t_values, r, rot, jfh_path, mode="1d")
+        _log_jfh_generation_complete(jfh_path, len(t_values), gen_start)
         return
 
     def edit_1d_JFH(self, t_values, r,  rot):

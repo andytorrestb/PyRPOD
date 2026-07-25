@@ -6,7 +6,7 @@ import pytest
 TESTS_DIR = Path(__file__).resolve().parent
 
 CATEGORIES = ("unit", "integration", "verification")
-GROUPS = ("mdao", "mission", "plume", "rpod")
+GROUPS = ("logging", "mdao", "mission", "plume", "rpod")
 
 # These files import a flat `pyrpod.<Module>` layout that no longer exists after
 # the rpod -> plume/vehicle refactor. Excluded from collection until they are

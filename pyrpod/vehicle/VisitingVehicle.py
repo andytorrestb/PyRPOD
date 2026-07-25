@@ -6,13 +6,14 @@ from matplotlib import pyplot as plt
 import numpy as np
 import math
 import os
+import logging
 
 from pyrpod.vehicle.Vehicle import Vehicle
 from pyrpod.mdao import SweepConfig
-from pyrpod.logging_utils import get_logger
+from pyrpod.logging_utils import log_asset, log_array_summary
 from pyrpod.util.io.fs import resolve_asset_path
 
-logger = get_logger("pyrpod.vehicle.VisitingVehicle")
+logger = logging.getLogger(__name__)
 
 # Adapted from
 # https://stackoverflow.com/questions/54616049/converting-a-rotation-matrix-to-euler-angles-and-back-special-case
@@ -213,6 +214,11 @@ class VisitingVehicle(Vehicle):
         path_to_stl = resolve_asset_path(self.case_dir, 'stl', self.config['vv']['stl_lm'])
         self.mesh = mesh.Mesh.from_file(path_to_stl)
         self.path_to_stl = path_to_stl
+        log_asset("visiting-vehicle STL", self.config['vv']['stl_lm'],
+                  path_to_stl, self.case_dir, logger=logger)
+        logger.info("Visiting vehicle geometry loaded: mesh_faces=%d",
+                    len(self.mesh.vectors))
+        log_array_summary(logger, "vv_mesh_vectors", self.mesh.vectors)
         return
 
     def get_thruster_cant(self, thruster_name):
@@ -284,10 +290,12 @@ class VisitingVehicle(Vehicle):
         """
         if thruster_data is None:
             try:
-                path_to_tcf = resolve_asset_path(self.case_dir, 'tcd', self.config['tcd']['tcf'])
+                tcf_name = self.config['tcd']['tcf']
             except KeyError:
-                # print("WARNING: Thruster Configuration File not set")
+                logger.warning("No [tcd] tcf configured for case %s; thruster "
+                               "configuration not loaded.", self.case_dir)
                 return
+            path_to_tcf = resolve_asset_path(self.case_dir, 'tcd', tcf_name)
             # Simple program, reading text from a file.
             with open(path_to_tcf, 'r') as f:
                 lines = f.readlines()
@@ -307,12 +315,26 @@ class VisitingVehicle(Vehicle):
                 self.thruster_data = process_str_thrusters(str_thrusters)
 
                 self.jet_interactions = lines.pop(0)
-        
+
+            log_asset("thruster config (TCF)", tcf_name, path_to_tcf,
+                      self.case_dir, logger=logger)
+
         else:
+            logger.debug("Thruster configuration overwritten in-memory "
+                         "(%d thrusters).", len(thruster_data))
             self.thruster_data = thruster_data
 
         self.use_clusters = False
-        
+
+        n_types = len({self.thruster_data[t]['type'][0]
+                       for t in self.thruster_data})
+        logger.info("Thruster configuration loaded: thrusters=%d "
+                    "thruster_types=%d", len(self.thruster_data), n_types)
+        if logger.isEnabledFor(logging.DEBUG):
+            exits = np.array([self.thruster_data[t]['exit'][0]
+                              for t in self.thruster_data])
+            log_array_summary(logger, "thruster_exit_coords", exits)
+
         return
     
     def change_cluster_config(self, x):
@@ -361,9 +383,14 @@ class VisitingVehicle(Vehicle):
 
             # Parse through strings and save data in a dictionary
             self.cluster_data = process_str_clusters(str_clusters)
-        
+
         self.use_clusters = True
-        
+
+        log_asset("cluster config (CCF)", self.config['tcd']['ccf'],
+                  path_to_ccf, self.case_dir, logger=logger)
+        logger.info("Cluster configuration loaded: clusters=%d units=%s",
+                    self.num_clusters, self.cluster_units)
+
         return
 
     def set_thruster_metrics(self):
@@ -383,11 +410,13 @@ class VisitingVehicle(Vehicle):
 
         # Read in path for thruster metric data.
         try:
-            path_to_thruster_metrics = resolve_asset_path(self.case_dir, 'tcd', self.config['tcd']['tdf'])
+            tdf_name = self.config['tcd']['tdf']
         except KeyError:
-            # print("WARNING: Thruster Metrics File Not Set")
+            logger.warning("No [tcd] tdf configured for case %s; thruster "
+                           "performance metrics not loaded.", self.case_dir)
             self.thruster_metrics = None
             return
+        path_to_thruster_metrics = resolve_asset_path(self.case_dir, 'tcd', tdf_name)
 
         # specify columns to be read as strings.
         str_cols = ['#']
@@ -411,7 +440,11 @@ class VisitingVehicle(Vehicle):
             # Save thruster metrics
             self.thruster_metrics[thruster_id] = thruster
 
-        # print(self.thruster_metrics)
+        log_asset("thruster metrics (TDF)", tdf_name, path_to_thruster_metrics,
+                  self.case_dir, logger=logger)
+        logger.info("Thruster metrics loaded: thruster_types=%d "
+                    "kinetics_performance_data=available",
+                    len(self.thruster_metrics))
 
         return
 

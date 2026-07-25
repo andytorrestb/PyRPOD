@@ -75,6 +75,11 @@ def ensure_dir(path):
     """
     Ensure that a directory exists. If it does not exist, create it.
 
+    Centralized directory helper: logs at INFO when a directory is created and
+    at DEBUG when it already exists, so directory activity is traceable without
+    scattering ``os.path.isdir``/``os.mkdir`` blocks through the workflows. A
+    logging failure never prevents creation of a required directory.
+
     Parameters
     ----------
     path : str
@@ -82,6 +87,15 @@ def ensure_dir(path):
     """
     if not os.path.exists(path):
         os.makedirs(path)
+        try:
+            log.info("Created directory: %s", os.path.abspath(path))
+        except Exception:
+            pass
+    else:
+        try:
+            log.debug("Directory already exists: %s", os.path.abspath(path))
+        except Exception:
+            pass
 
 def ensure_parent_dir(file_path):
     """
@@ -95,3 +109,7 @@ def ensure_parent_dir(file_path):
     parent_dir = os.path.dirname(file_path)
     if parent_dir and not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
+        try:
+            log.info("Created directory: %s", os.path.abspath(parent_dir))
+        except Exception:
+            pass
