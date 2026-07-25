@@ -1,10 +1,11 @@
+import logging
+
 from pyrpod.mission.SubModule import SubModule
 import numpy as np
 import pandas as pd
-from pyrpod.logging_utils import get_logger
 from pyrpod.util.io.fs import resolve_asset_path
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 class FuelManager(SubModule):
     # def __init__(self, isp, mass):

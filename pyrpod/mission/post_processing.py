@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from pyrpod.logging_utils import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class PostProcessor:

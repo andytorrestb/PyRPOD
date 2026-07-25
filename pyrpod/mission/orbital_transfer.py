@@ -1,8 +1,8 @@
 from pyrpod.orbital import HohmannTransfer
 from astropy import units as u
-from pyrpod.logging_utils import get_logger
+import logging
 
-logger = get_logger("pyrpod.mission.orbital_transfer")
+logger = logging.getLogger(__name__)
 
 class OrbitalTransferEngine:
     def __init__(self):
