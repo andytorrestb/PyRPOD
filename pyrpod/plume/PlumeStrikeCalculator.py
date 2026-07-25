@@ -32,8 +32,10 @@ Future work (no new dependencies planned):
 """
 from __future__ import annotations
 
+import os
+import time
 from concurrent.futures import ProcessPoolExecutor
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from pyrpod.plume.RarefiedPlumeGasKinetics import (
@@ -409,9 +411,14 @@ def _parallel_worker_init(
 def _parallel_worker_compute(task) -> Any:
     """Compute strikes for one firing inside a worker process.
 
-    task is (firing_index, jfh_step); returns (firing_index, result dict).
+    task is (firing_index, jfh_step); returns
+    (firing_index, result dict, meta dict). The meta carries only
+    non-numerical observability data (worker PID, per-firing wall/CPU time)
+    for the parent to log — it never participates in numerical accumulation.
     """
     firing_index, jfh_step = task
+    wall_start = time.perf_counter()
+    cpu_start = time.process_time()
     result = _compute_plume_strikes_core(
         face_centroids=_WORKER_STATE['face_centroids'],
         target_unit_normals=_WORKER_STATE['target_unit_normals'],
@@ -420,7 +427,13 @@ def _parallel_worker_compute(task) -> Any:
         jfh_step=jfh_step,
         plume_params=_WORKER_STATE['plume_params'],
     )
-    return firing_index, result
+    meta = {
+        'pid': os.getpid(),
+        'firing_index': firing_index,
+        'wall_time_s': time.perf_counter() - wall_start,
+        'cpu_time_s': time.process_time() - cpu_start,
+    }
+    return firing_index, result, meta
 
 
 def run_parallel_plume_strikes(
@@ -431,7 +444,8 @@ def run_parallel_plume_strikes(
     thruster_metrics: Optional[Dict[str, Any]],
     plume_params: Dict[str, Any],
     workers: int,
-) -> List[Dict[str, np.ndarray]]:
+    return_meta: bool = False,
+):
     """Compute per-firing strike results across processes, one firing per task.
 
     All inputs must be plain serializable data (NumPy arrays, dicts,
@@ -440,10 +454,17 @@ def run_parallel_plume_strikes(
     regardless of completion order; cumulative accumulation and VTK output
     remain the caller's responsibility (serial, in the parent process).
 
+    By default returns ``List[result dict]`` (unchanged legacy contract). When
+    ``return_meta`` is True, returns ``(results, metas)`` where ``metas`` is a
+    firing-indexed list of worker observability dicts (PID, wall/CPU time) so
+    the parent process can emit per-firing progress records; the numerical
+    results are identical either way.
+
     Raises whatever the executor or workers raise; callers are expected to
     fall back to the serial path with a clear message.
     """
     results: List[Optional[Dict[str, np.ndarray]]] = [None] * len(jfh_steps)
+    metas: List[Optional[Dict[str, Any]]] = [None] * len(jfh_steps)
     with ProcessPoolExecutor(
         max_workers=workers,
         initializer=_parallel_worker_init,
@@ -460,8 +481,11 @@ def run_parallel_plume_strikes(
             for i, step in enumerate(jfh_steps)
         ]
         for future in futures:
-            firing_index, result = future.result()
+            firing_index, result, meta = future.result()
             results[firing_index] = result
+            metas[firing_index] = meta
+    if return_meta:
+        return results, metas
     return results
 
 
