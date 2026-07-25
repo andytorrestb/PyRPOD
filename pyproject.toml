@@ -34,6 +34,7 @@ markers = [
     "unit: unit-level test cases",
     "integration: integration test cases",
     "verification: verification/validation test cases",
+    "logging: logging subsystem tests",
     "mdao: mdao subsystem tests",
     "mission: mission subsystem tests",
     "plume: plume subsystem tests",
