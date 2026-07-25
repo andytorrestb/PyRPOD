@@ -1,13 +1,15 @@
 import configparser
+import logging
+import time
 import numpy as np
 import sympy as sp
 
 from pyrpod.util.io.file_print import print_JFH
-from pyrpod.logging_utils import get_logger
+from pyrpod.logging_utils import log_asset
 from pyrpod.util.math.transform import rotation_matrix_from_vectors
 from pyrpod.util.io.fs import resolve_asset_path
 
-logger = get_logger("pyrpod.rpod.JetFiringHistory")
+logger = logging.getLogger(__name__)
 
 def make_norm(vector_value_function):
     """Calculate vector norm/magnitude using the Pythagoream Theorem."""
@@ -84,12 +86,16 @@ class JetFiringHistory:
 
         """
 
+        parse_start = time.perf_counter()
         try:
-            path_to_jfh = resolve_asset_path(self.case_dir, 'jfh', self.config['jfh']['jfh'])
+            jfh_name = self.config['jfh']['jfh']
         except KeyError:
-            # print("WARNING: Jet Firing History not set")
+            logger.debug("No [jfh] jfh configured for case %s; JFH not loaded.",
+                         self.case_dir)
             self.JFH = None
             return
+        logger.debug("Resolving JFH asset %r for case %s", jfh_name, self.case_dir)
+        path_to_jfh = resolve_asset_path(self.case_dir, 'jfh', jfh_name)
 
         with open(path_to_jfh, 'r') as f:
             lines = f.readlines()
@@ -98,7 +104,8 @@ class JetFiringHistory:
             try:
                 self.nt = int(lines.pop(0).split(' ')[4])
             except IndexError:
-                logger.warning("Supplied JFH file is empty: %s", path_to_jfh)
+                logger.error("Supplied JFH file is empty (no header/firing "
+                             "count): %s", path_to_jfh)
                 self.JFH = None
                 return
 
@@ -162,6 +169,27 @@ class JetFiringHistory:
                 JFH.append(time_step)
             self.JFH = JFH
             f.close()
+
+        parse_s = time.perf_counter() - parse_start
+
+        # INFO summary of the loaded JFH; provenance + checksum via log_asset.
+        log_asset("JFH", jfh_name, path_to_jfh, self.case_dir, logger=logger)
+        try:
+            times = [float(step['t']) for step in JFH]
+            total_activations = sum(len(step['thrusters']) for step in JFH)
+            unique_ids = sorted({thr for step in JFH for thr in step['thrusters']})
+            logger.info(
+                "JFH loaded: firings=%d time_range_s=[%s, %s] "
+                "total_thruster_activations=%d unique_thruster_ids=%s "
+                "parse_time_s=%.4f",
+                len(JFH),
+                f"{min(times):.4g}" if times else "n/a",
+                f"{max(times):.4g}" if times else "n/a",
+                total_activations, unique_ids, parse_s,
+            )
+        except (KeyError, ValueError) as exc:  # pragma: no cover - defensive
+            logger.warning("JFH loaded but summary stats failed: %s", exc,
+                           exc_info=True)
         return
 
 
