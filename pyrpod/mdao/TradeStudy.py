@@ -1,12 +1,18 @@
 import os
 import csv
+import time
+import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from pyrpod.rpod import JetFiringHistory, PlumeStrikeEstimationStudy
 from pyrpod.mdao import SweepConfig
+from pyrpod.util.io.fs import ensure_dir
 import configparser
+
+logger = logging.getLogger(__name__)
+
 
 class TradeStudy():
     def __init__(self, case_dir):
@@ -92,7 +98,9 @@ class TradeStudy():
         first_column = report_results.columns[0]
         # Convert DataFrame columns to NumPy arrays for indexing
         x_values = report_results[first_column].to_numpy()
-        print(report_results)
+        # Do not log full DataFrames at INFO; a compact DEBUG summary suffices.
+        logger.debug("Mission report DataFrame: shape=%s columns=%s",
+                     report_results.shape, list(report_results.columns))
         # Plot each parameter against the first parameter
         for column in report_results.columns[1:8]:
             y_values = report_results[column].to_numpy()
@@ -155,20 +163,26 @@ class TradeStudy():
         axial_overshoot = sweep_vars['axial_overshoot']
         self.max_v0 = np.max(axial_overshoot)
 
+        logger.info("Trade study initialized: sweep_type=axial_overshoot "
+                    "case_dir=%s n_configurations=%d", self.case_dir,
+                    len(axial_overshoot))
+        study_start = time.perf_counter()
+
         # Link elements for RPOD analysis.
         self.init_trade_study(lm, tv)
 
         # Create results directory if necessary.
         results_dir = self.case_dir + 'results'
-        if not os.path.isdir(results_dir):
-            os.mkdir(results_dir)       
+        ensure_dir(results_dir)
 
         # Loop through over shoot velocities to test.
         for i, v_o in enumerate(axial_overshoot):
 
-            # print(i, v_o)
-            # # Set unique case identifier within trade study.
             self.rpod.set_case_key(i, 0)
+            config_start = time.perf_counter()
+            logger.info("Trade-study config %d/%d: case_key=%s "
+                        "axial_overshoot_m_s=%s", i + 1, len(axial_overshoot),
+                        self.rpod.get_case_key(), v_o)
 
             # Create JFH for a given velocity.
             self.rpod.print_jfh_1d_approach_n_fire(
@@ -180,16 +194,22 @@ class TradeStudy():
                                 )
 
             # Reset JFH according to specific case.
-            self.init_trade_study_case()   
+            self.init_trade_study_case()
             self.rpod.graph_jfh(trade_study= True)
             self.rpod.jfh_plume_strikes(trade_study = True)
 
             self.print_mission_report()
-        self.interpret_mission_report()           
-    
+            logger.info("Trade-study config %d/%d completed: case_key=%s "
+                        "config_time_s=%.3f", i + 1, len(axial_overshoot),
+                        self.rpod.get_case_key(),
+                        time.perf_counter() - config_start)
+        report_path = self.case_dir + 'results/MissionReport.csv'
+        logger.info("Trade study completed: sweep_type=axial_overshoot "
+                    "configurations=%d mission_report=%s total_time_s=%.3f "
+                    "status=successful", len(axial_overshoot), report_path,
+                    time.perf_counter() - study_start)
+        self.interpret_mission_report()
 
-            # self.rpod.jfh_plume_strikes(trade_study = True)
-    
     def run_surface_cant_sweep(self, sweep_vars, lm, tv):
         """
         """
@@ -206,8 +226,7 @@ class TradeStudy():
 
         # Create results directory if necessary.
         results_dir = self.case_dir + 'results'
-        if not os.path.isdir(results_dir):
-            os.mkdir(results_dir)       
+        ensure_dir(results_dir)
 
         # Loop through over shoot velocities to test.
         for i, cant in enumerate(surface_cant_angles):
@@ -255,8 +274,7 @@ class TradeStudy():
 
         # Create results directory if necessary.
         results_dir = self.case_dir + 'results'
-        if not os.path.isdir(results_dir):
-            os.mkdir(results_dir)       
+        ensure_dir(results_dir)
 
         # Loop through over shoot velocities to test.
         for i, v_o in enumerate(axial_overshoot):
