@@ -1,0 +1,56 @@
+# Example PyRPOD case logging configuration.
+#
+# Copy this file into a case directory as:
+#
+#     <case_dir>/logging.ini
+#
+# When present, its [logging] section is read by
+# pyrpod.logging_utils.configure_logging(case_dir). When absent, the built-in
+# defaults below are used and PyRPOD logs that it fell back to defaults.
+#
+# Precedence (highest wins):
+#   1. Explicit configure_logging(...) keyword arguments
+#   2. Environment variables (PYRPOD_LOG_LEVEL, PYRPOD_LOG_FORMAT)
+#   3. This logging.ini
+#   4. Built-in defaults
+#
+# The values shown here are also the built-in defaults.
+
+[logging]
+# Master switch. When false, PyRPOD installs no console/file handlers and
+# opens no runtime log file (module loggers still exist but emit nowhere by
+# default).
+enabled = true
+
+# Console (stderr) logging can be toggled independently of file logging.
+console = true
+
+# File logging (a fresh runtime log per run under results/logs/) can be
+# toggled independently of console logging.
+file = true
+
+# Logging level applied to both the console and file handlers.
+# One of: DEBUG, INFO, WARNING, ERROR.
+level = INFO
+
+# Emit an INFO progress record every N completed firings (and always for the
+# final firing). Minimum 1.
+progress_every_n_firings = 1
+
+# Log compact NumPy array summaries (shape/dtype/min/max/mean/nonzero/nan/...)
+# at DEBUG. Full arrays are never logged.
+log_array_stats = true
+
+# Measure and log wall time, CPU time, and tracemalloc peak Python memory.
+log_performance = true
+
+# Copy the case config.ini (and this logging.ini) into results/logs/ and log
+# their SHA-256 checksums for reproducibility.
+snapshot_config = true
+
+# Compute and log SHA-256 checksums of loaded input assets.
+checksum_inputs = true
+
+# Optional: override the record format. The default is:
+#   %(asctime)s [%(levelname)s] %(name)s: %(message)s
+# format = %(asctime)s [%(levelname)s] %(name)s: %(message)s

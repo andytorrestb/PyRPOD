@@ -46,3 +46,31 @@ PyRPOD utilizies scientific libraries such as NumPy, SciPy, Matplotlib, and SymP
    python -m pytest -m rpod             # a specific subsystem (mdao, mission, plume, rpod)
    python -m pytest tests/rpod          # or just point pytest at a directory/file directly
    ```
+
+## Logging
+
+PyRPOD ships a formal, opt-in operational logging system built entirely on the
+Python standard library. **Importing PyRPOD has no logging side effects** — no
+files, directories, handlers, or root-logger changes. Applications turn logging
+on explicitly:
+
+```python
+from pyrpod.logging_utils import configure_logging
+
+session = configure_logging(case_dir)
+try:
+    # ... run the PyRPOD workflow, e.g. study.jfh_plume_strikes() ...
+    session.finalize("successful")
+finally:
+    session.close()
+```
+
+Runtime logs are written to `<case_dir>/results/logs/<case-name>_<timestamp>.log`
+(a new file per run). Behavior is configured per case via an optional
+`<case_dir>/logging.ini`, with environment variables (`PYRPOD_LOG_LEVEL`,
+`PYRPOD_LOG_FORMAT`) and explicit API arguments taking precedence.
+
+See [docs/logging.md](docs/logging.md) for the full architecture, the
+`logging.ini` schema ([example](docs/logging.ini.example)), configuration
+precedence, log-level guidance, input checksums, configuration snapshots,
+performance/memory caveats, and serial-fallback behavior.

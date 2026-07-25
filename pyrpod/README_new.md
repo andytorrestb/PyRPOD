@@ -56,22 +56,35 @@ Run tests using the `config_test.py` or dedicated test cases provided for each m
 
 ## Logging
 
-We use Python's logging across modules.
+PyRPOD has a centralized, opt-in operational logging system. **Importing PyRPOD
+has no logging side effects** — modules never configure handlers on import.
 
-- Get a logger:
-  - from pyrpod.logging_utils import get_logger
-  - logger = get_logger("pyrpod.<package>.<module>")
-- Default level: INFO. Override via env var (PowerShell):
-  - $env:PYRPOD_LOG_LEVEL = "DEBUG"
-- Customize format via env var:
-  - $env:PYRPOD_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+- In a module, get a logger the standard way:
+  - `import logging`
+  - `logger = logging.getLogger(__name__)`
+- At the application boundary, turn logging on explicitly:
+  - `from pyrpod.logging_utils import configure_logging`
+  - `session = configure_logging(case_dir)`
+- Override level/format via env vars (PowerShell):
+  - `$env:PYRPOD_LOG_LEVEL = "DEBUG"`
+  - `$env:PYRPOD_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"`
+
+Runtime logs are written to `<case_dir>/results/logs/<case-name>_<timestamp>.log`.
+See [`docs/logging.md`](../docs/logging.md) for the full architecture, the
+`logging.ini` schema, configuration precedence, input checksums, configuration
+snapshots, performance/memory caveats, and serial-fallback behavior.
 
 Example:
 
 ```python
-from pyrpod.logging_utils import get_logger
-logger = get_logger("pyrpod.example")
-logger.info("Hello from PyRPOD")
+from pyrpod.logging_utils import configure_logging
+
+session = configure_logging(case_dir)
+try:
+    # ... run the PyRPOD workflow, e.g. study.jfh_plume_strikes() ...
+    session.finalize("successful")
+finally:
+    session.close()
 ```
 
 ## Adding New Modules
