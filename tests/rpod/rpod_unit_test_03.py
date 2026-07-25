@@ -10,7 +10,7 @@
 # in pyrpod.util.io.file_print without making assertions yet. These files
 # will serve as fixtures for future tests to lock current behavior.
 
-import unittest, os
+import unittest, os, shutil, tempfile
 import numpy as np
 
 from pyrpod.util.io import file_print as fp
@@ -19,8 +19,10 @@ from pyrpod.util.io.fs import ensure_dir
 
 class CaptureJFHOutputs(unittest.TestCase):
 	def setUp(self):
-		# Output directory for captured files (kept within tests tree)
-		self.out_dir = os.path.join(os.path.dirname(__file__), 'jfh_outputs')
+		# Write captures to a throwaway temp dir so test runs never mutate
+		# tracked files. The committed tests/rpod/jfh_outputs/*.txt remain a
+		# stable ground-truth snapshot for future comparison tests.
+		self.out_dir = tempfile.mkdtemp(prefix='jfh_outputs_')
 		ensure_dir(self.out_dir)
 
 		# Deterministic sample data used across all captures
@@ -42,6 +44,9 @@ class CaptureJFHOutputs(unittest.TestCase):
 
 		# For print_1d_JFH, rot[i][j][k] indexing is used with scientific formatting
 		self.rot_array = [base_rot.copy() for _ in range(3)]
+
+	def tearDown(self):
+		shutil.rmtree(self.out_dir, ignore_errors=True)
 
 	def test_capture_print_JFH(self):
 		out_file = os.path.join(self.out_dir, 'print_JFH_output.txt')
