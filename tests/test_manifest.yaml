@@ -1,0 +1,1446 @@
+# PyRPOD centralized test manifest
+# ================================
+# Source of truth for INVENTORY-level metadata about every test asset in
+# tests/ (description, subsystem, category, how it is executed, how far its
+# development has progressed).  Pytest remains the source of truth for
+# EXECUTION outcomes (pass / fail / skip); those never appear here.
+#
+# Regenerate tests/README.md and the HTML execution report with:
+#     python scripts/generate_test_dashboard.py
+#
+# Schema (one entry per file under tests/):
+#   path                     repo-relative path, POSIX separators (required)
+#   description              one-line human-readable purpose (required)
+#   subsystem                logging | mdao | mission | plume | rpod | tooling
+#   category                 unit | integration | verification
+#   execution_mode           automated | manual
+#   development_status       implemented | placeholder | needs_review
+#                            | blocked | archived | deprecated
+#   collection_status        collected | ignored | manual | archived
+#   reference                publication / benchmark, or null
+#   manual_command           exact command for manual assets, or null
+#   collection_ignore_reason why the asset is absent from the pytest run,
+#                            or null for collection_status: collected
+#
+# Helper modules that define no tests are intentionally absent:
+#   tests/conftest.py, tests/plume/plume_figure_utils.py,
+#   tests/plume/plume_impingement_utils.py.
+
+tests:
+
+  # ---------------------------------------------------------------- logging
+  - path: tests/logging/logging_unit_test_01.py
+    description: >-
+      Unit tests for the centralized operational logging system
+      (pyrpod.logging_utils): import side effects, handler ownership,
+      configuration precedence, console/file toggles, runtime-log
+      naming and location, configuration snapshots, input-asset logging
+      and array summaries.
+    subsystem: logging
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/logging/logging_integration_test_01.py
+    description: >-
+      Integration tests for operational logging of the plume-strike
+      workflow: fail-fast validation of required inputs, progress cadence,
+      serial/parallel event equivalence, DEBUG-vs-INFO artifact levels,
+      parallel-to-serial fallback with successful_with_warning status and
+      optional-visualization warn-and-continue behavior.
+    subsystem: logging
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  # ------------------------------------------------------------------- mdao
+  - path: tests/mdao/mdao_unit_test_01.py
+    description: >-
+      Placeholder MDAO unit test; the test body returns immediately and
+      asserts nothing.
+    subsystem: mdao
+    category: unit
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mdao/mdao_unit_test_02.py
+    description: >-
+      Intended to build an array of cant-angle-swept thruster
+      configurations (symmetric pitch/yaw canting) and visualize each
+      sweep step. The entire body is currently commented out, so the test
+      asserts nothing.
+    subsystem: mdao
+    category: unit
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mdao/mdao_integration_test_01.py
+    description: >-
+      Placeholder MDAO integration test; the test body returns immediately
+      and asserts nothing.
+    subsystem: mdao
+    category: integration
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mdao/mdao_verification_test_01.py
+    description: >-
+      OpenMDAO axial-positioning optimizer: minimizes the maximum heat-flux
+      load for a 1D approach by varying the axial position of the thruster
+      packs.
+    subsystem: mdao
+    category: verification
+    execution_mode: manual
+    development_status: blocked
+    collection_status: manual
+    reference: null
+    manual_command: python tests/mdao/mdao_verification_test_01.py
+    collection_ignore_reason: >-
+      Defines an openmdao ExplicitComponent rather than a pytest test, so
+      pytest collects nothing from it. The module header records "This has
+      been having issues, disregard for now (4/2/24)".
+
+  - path: tests/mdao/mdao_verification_test_02.py
+    description: >-
+      OpenMDAO cant-angle optimizer: minimizes the maximum heat-flux load
+      for a 1D approach by varying the cant angle of the deceleration
+      thrusters.
+    subsystem: mdao
+    category: verification
+    execution_mode: manual
+    development_status: blocked
+    collection_status: manual
+    reference: null
+    manual_command: python tests/mdao/mdao_verification_test_02.py
+    collection_ignore_reason: >-
+      Defines an openmdao ExplicitComponent rather than a pytest test, so
+      pytest collects nothing from it. The module header records "This has
+      been having issues, disregard for now (4/3/24)", and the __main__
+      block contains an incomplete call (prob.set_val with a missing value).
+
+  - path: tests/mdao/mdao_verification_test_03.py
+    description: >-
+      OpenMDAO axial-plus-cant evaluator: reports maximum cumulative
+      heat-flux load and JFH propellant expenditure for a 1D approach given
+      the axial position and cant angle of the deceleration thrusters.
+    subsystem: mdao
+    category: verification
+    execution_mode: manual
+    development_status: blocked
+    collection_status: manual
+    reference: null
+    manual_command: python tests/mdao/mdao_verification_test_03.py
+    collection_ignore_reason: >-
+      Defines an openmdao ExplicitComponent rather than a pytest test, so
+      pytest collects nothing from it. The module header records "This has
+      been having issues, disregard for now (4/3/24)", and the __main__
+      block contains an incomplete call (prob.set_val with a missing value).
+
+  - path: tests/mdao/mdao_verification_test_04.py
+    description: >-
+      Intended variable-sweep study of the maximum overshoot velocity a
+      logistics module can absorb with a fixed thruster configuration and
+      deceleration start distance. The entire body is commented out, so the
+      test asserts nothing.
+    subsystem: mdao
+    category: verification
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mdao/mdao_verification_test_05.py
+    description: >-
+      Intended trade study sweeping the surface cant angle of the RCS pack.
+      The entire body is commented out, so the test asserts nothing.
+    subsystem: mdao
+    category: verification
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mdao/mdao_verification_test_06.py
+    description: >-
+      Intended multi-variable trade study sweeping axial overshoot together
+      with surface cant angle. The entire body is commented out, so the test
+      asserts nothing.
+    subsystem: mdao
+    category: verification
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  # ---------------------------------------------------------------- mission
+  - path: tests/mission/mission_unit_test_01.py
+    description: >-
+      Placeholder mission unit test; the test body returns immediately and
+      asserts nothing.
+    subsystem: mission
+    category: unit
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_01.py
+    description: >-
+      Calculates the 6DOF performance (normal vector, force, translational
+      acceleration, torque) of each individual thruster in the logistics
+      module. Expected-value helpers are present but no assertion is made
+      against them, so the test only exercises the code path.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_02.py
+    description: >-
+      Intended to calculate the 6DOF performance of thruster working
+      groups. The body only assigns mass-distribution constants; the header
+      records that the analysis was disabled because it created unwanted
+      data files, so the test asserts nothing.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_03.py
+    description: >-
+      Calculates RCS performance for a given flight plan, approximating the
+      1D delta-v requirements. Exercises the flight-evaluation pipeline
+      end to end but makes no assertion.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_04.py
+    description: >-
+      Analyzes a notional 1D translation-plus-rotation approach (module
+      header marks it "NEEDS TLC"). Exercises the flight-evaluation
+      pipeline end to end but makes no assertion.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_05.py
+    description: >-
+      Graphs thrust versus time or distance for the given design
+      requirements to establish an RCS thrust-requirement flight envelope.
+      Exercises the plotting pipeline but makes no assertion.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_06.py
+    description: >-
+      Graphs propellant-mass requirements across the flight envelope for
+      the given design requirements. Exercises the plotting pipeline but
+      makes no assertion.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_07.py
+    description: >-
+      Contours the burn-time plot across a range of thrust and Isp values
+      (module header marks it "NEEDS TLC"). Exercises the plotting pipeline
+      but makes no assertion.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_integration_test_08.py
+    description: >-
+      Contours propellant usage across the various delta-v legs of a given
+      flight plan. Exercises the plotting pipeline but makes no assertion.
+    subsystem: mission
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_verification_test_01.py
+    description: >-
+      Placeholder mission verification test; the test body returns
+      immediately and asserts nothing.
+    subsystem: mission
+    category: verification
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/mission/mission_verification_test_02.py
+    description: >-
+      Builds and summarizes a chain of Hohmann transfers (LEO to MEO to
+      GEO) through MissionPlanner.orbital_transfer. Exercises the orbital
+      transfer path but makes no assertion.
+    subsystem: mission
+    category: verification
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  # ------------------------------------------------------------------ plume
+  - path: tests/plume/plume_unit_test_01.py
+    description: >-
+      Placeholder plume unit test; the test body returns immediately and
+      asserts nothing.
+    subsystem: plume
+    category: unit
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_unit_test_02.py
+    description: >-
+      Verifies the closed form of the special factor Q against a direct
+      50-term truncation of the printed Legendre series, its centerline
+      reduction, and the 0 < Q <= 1 bound that keeps the
+      exp(-S0^2 (1-Q)) combination overflow-safe.
+    subsystem: plume
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Eq. 9
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_unit_test_03.py
+    description: >-
+      Tests the Simons cosine-law plume model after the gamma
+      generalization: isentropic throat ratios from gamma, zero density
+      beyond the limiting angle, parameterizable beaming exponent kappa
+      and exit-referenced density scaling.
+    subsystem: plume
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: >-
+      Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Sec. II.C,
+      Eqs. 25-26
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_unit_test_04.py
+    description: >-
+      Asserts that the NumPy-vectorized plume-strike detection in
+      compute_plume_strikes() reproduces the scalar reference
+      implementation exactly for every firing of case/rpod/1d_approach
+      (geometry only) and case/rpod/multi_thrusters_square (Simplified
+      kinetics, multiple thrusters).
+    subsystem: plume
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_integration_test_01.py
+    description: >-
+      Placeholder plume integration test; the test body returns immediately
+      and asserts nothing.
+    subsystem: plume
+    category: integration
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_integration_test_02.py
+    description: >-
+      Asserts that jfh_plume_strikes() keeps its default serial,
+      return-compatible behavior, produces identical per-firing and
+      cumulative output when the optional process-parallel path is enabled,
+      and rejects invalid worker counts with a clear error.
+    subsystem: plume
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_verification_test_01.py
+    description: >-
+      Intended to plot simple isentropic radial-expansion profiles. Both
+      plotting calls are commented out, leaving only construction of an
+      IsentropicExpansion object, so the test asserts nothing.
+    subsystem: plume
+    category: verification
+    execution_mode: automated
+    development_status: placeholder
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_verification_test_02.py
+    description: >-
+      Pinning tests for SimplifiedGasKinetics against reference values
+      computed independently from the paper's equations with mpmath at 40
+      significant digits, plus far-field asymptote convergence and the
+      near-field divergence of the corrected Eq. 21 centerline temperature
+      quadrature.
+    subsystem: plume
+    category: verification
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: >-
+      Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Eqs. 13-19, 22-24
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_verification_test_03.py
+    description: >-
+      Verification of the full collisionless model CollisionlessGasKinetics
+      against the paper's internal anchors: centerline reduction to the
+      Eq. 18/19 closed forms, vanishing W, the Eq. 30 far-field error
+      bound, monotonic centerline density decay and asymptote convergence.
+    subsystem: plume
+    category: verification
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: >-
+      Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Eqs. 5-12, 20, 30
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/plume/plume_verification_test_04.py
+    description: >-
+      Reproduces Fig. 2: plume boundaries (the n/n0 = 0.001 contour of the
+      full analytical model) for exit speed ratios S0 = 1, 2, 3.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 2
+    manual_command: python tests/plume/plume_verification_test_04.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_05.py
+    description: >-
+      Reproduces Fig. 3: normalized analytical centerline number density
+      (Eq. 18) versus X/D for S0 = 1, 2, 3.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 3
+    manual_command: python tests/plume/plume_verification_test_05.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_06.py
+    description: >-
+      Reproduces Fig. 4: normalized analytical centerline U-velocity
+      (Eq. 19) versus X/D for S0 = 1, 2, 3.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 4
+    manual_command: python tests/plume/plume_verification_test_06.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_07.py
+    description: >-
+      Reproduces Fig. 5: normalized analytical centerline temperature
+      (Eq. 21, exact quadrature) versus X/D for S0 = 1, 2, 3.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 5
+    manual_command: python tests/plume/plume_verification_test_07.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_08.py
+    description: >-
+      Reproduces Fig. 6: normalized number-density contours at Kn = 100,
+      S0 = 2.0; analytical plus simplified in the upper half-plane, Simons
+      plus the DSMC overlay slot in the lower half-plane.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 6
+    manual_command: python tests/plume/plume_verification_test_08.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_09.py
+    description: >-
+      Reproduces Fig. 7: normalized number-density contours at Kn = 0.1,
+      S0 = 2.0. Same analytic content as Fig. 6; the Kn distinction lives
+      in the DSMC overlay slot.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 7
+    manual_command: python tests/plume/plume_verification_test_09.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_10.py
+    description: >-
+      Reproduces Fig. 8: normalized number-density contours at Kn = 0.01,
+      S0 = 2.0. Same analytic content as Fig. 6; the Kn distinction lives
+      in the DSMC overlay slot.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 8
+    manual_command: python tests/plume/plume_verification_test_10.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_11.py
+    description: >-
+      Reproduces Fig. 9: relative density error between the analytical and
+      Simons cosine-law solutions, |n_A/n_Simons - 1| (Eq. 28), S0 = 2.0.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 9
+    manual_command: python tests/plume/plume_verification_test_11.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_12.py
+    description: >-
+      Reproduces Fig. 10: relative density error between the analytical and
+      simplified analytical solutions, |n_A/n_As - 1| (Eq. 29), S0 = 2.0.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 10
+    manual_command: python tests/plume/plume_verification_test_12.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_13.py
+    description: >-
+      Reproduces Fig. 11: normalized pressure contours
+      p1/p0 = (n1/n0)(T1/T0) at Kn = 100, S0 = 2.0.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 11
+    manual_command: python tests/plume/plume_verification_test_13.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_14.py
+    description: >-
+      Reproduces Fig. 12: normalized pressure contours p1/p0 at Kn = 0.1,
+      S0 = 2.0. Same analytic content as Fig. 11.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 12
+    manual_command: python tests/plume/plume_verification_test_14.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_15.py
+    description: >-
+      Reproduces Fig. 13: normalized temperature contours T1/T0 at
+      Kn = 100, S0 = 2.0 - the figure the paper uses to argue that
+      p = n k T0 is invalid because T1 < T0 everywhere downstream.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 13
+    manual_command: python tests/plume/plume_verification_test_15.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_16.py
+    description: >-
+      Reproduces Fig. 14: normalized U-velocity contours U1*sqrt(beta0) at
+      Kn = 100, S0 = 2.0.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 14
+    manual_command: python tests/plume/plume_verification_test_16.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_17.py
+    description: >-
+      Reproduces Fig. 15: normalized transverse-velocity contours at
+      Kn = 100, S0 = 2.0. In the plotted XOZ plane the y-component is zero
+      by axisymmetry, so the model's W (Eq. 7) is plotted.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 15
+    manual_command: python tests/plume/plume_verification_test_17.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_18.py
+    description: >-
+      Reproduces Fig. 16: normalized radial-velocity Vr contours at
+      Kn = 100, S0 = 2.0.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 16
+    manual_command: python tests/plume/plume_verification_test_18.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_19.py
+    description: >-
+      Reproduces Fig. 17: normalized radial-velocity Vr contours at
+      Kn = 0.1, S0 = 2.0. Same analytic content as Fig. 16.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 17
+    manual_command: python tests/plume/plume_verification_test_19.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_20.py
+    description: >-
+      Reproduces Fig. 18: normalized radial-velocity Vr contours at
+      Kn = 0.01, S0 = 2.0. Same analytic content as Fig. 16.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 18
+    manual_command: python tests/plume/plume_verification_test_20.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_21.py
+    description: >-
+      Reproduces Fig. 19: centerline density profiles at Kn = 100,
+      S0 = 2.0 - analytical (Eq. 18), simplified (Eq. 14), Simons
+      (exit-referenced cosine law) and the DSMC overlay slot.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 19
+    manual_command: python tests/plume/plume_verification_test_21.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_22.py
+    description: >-
+      Reproduces Fig. 20: centerline density profiles at Kn = 0.1,
+      S0 = 2.0. Same analytic content as Fig. 19.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 20
+    manual_command: python tests/plume/plume_verification_test_22.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_23.py
+    description: >-
+      Reproduces Fig. 21: centerline density profiles at Kn = 0.01,
+      S0 = 2.0. Same analytic content as Fig. 19.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 21
+    manual_command: python tests/plume/plume_verification_test_23.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_24.py
+    description: >-
+      Reproduces Fig. 22: density profiles along r/D = 10 at Kn = 100,
+      S0 = 2.0 - analytical, simplified, Simons with kappa = 1.5/2/3 under
+      a single Boyton normalization, and the DSMC overlay slot.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 22
+    manual_command: python tests/plume/plume_verification_test_24.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_25.py
+    description: >-
+      Reproduces Fig. 23: density profiles along r/D = 10 at Kn = 0.1,
+      S0 = 2.0. Same analytic content as Fig. 22.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 23
+    manual_command: python tests/plume/plume_verification_test_25.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_26.py
+    description: >-
+      Reproduces Fig. 24: density profiles along r/D = 10 at Kn = 0.01,
+      S0 = 2.0. Same analytic content as Fig. 22.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 24
+    manual_command: python tests/plume/plume_verification_test_26.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_27.py
+    description: >-
+      Reproduces Fig. 25: normalized mass flux along r/D = 10 versus theta
+      at S0 = 2.0, together with three DSMC overlay slots. The module
+      header records the flux-normalization convention adopted to match the
+      printed magnitudes.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Fig. 25
+    manual_command: python tests/plume/plume_verification_test_27.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_28.py
+    description: >-
+      Reproduces Fig. 17: diffuse-plate surface pressure contours
+      Cp,d(s, tau) for the round argon jet on the inclined plate (Eq. 9),
+      overlaid with the current PyRPOD approximation.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 17
+    manual_command: python tests/plume/plume_verification_test_28.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_29.py
+    description: >-
+      Reproduces Fig. 18: specular-plate surface pressure contours
+      Cp,s(s, tau) (Eq. 14), overlaid with the current PyRPOD
+      approximation at sigma = 0.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 18
+    manual_command: python tests/plume/plume_verification_test_29.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_30.py
+    description: >-
+      Reproduces Fig. 19: diffuse-plate friction coefficient Cf1,d(s, tau)
+      along the inclined direction (Eq. 11), whose zero contour marks the
+      stagnation line, overlaid with the current PyRPOD approximation.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 19
+    manual_command: python tests/plume/plume_verification_test_30.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_31.py
+    description: >-
+      Reproduces Fig. 20: diffuse-plate friction coefficient Cf2,d(s, tau)
+      along the horizontal direction (Eq. 12), antisymmetric in s, overlaid
+      with the current PyRPOD approximation.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 20
+    manual_command: python tests/plume/plume_verification_test_31.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_32.py
+    description: >-
+      Reproduces Fig. 21: diffuse-plate heat-flux coefficient Cq,d(s, tau)
+      (Eq. 13), peaking just beneath the plate center, overlaid with the
+      current PyRPOD approximation.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 21
+    manual_command: python tests/plume/plume_verification_test_32.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_33.py
+    description: >-
+      Reproduces Fig. 5: temperature contours T/T0 for the 2D slot jet
+      impinging on an inclined DIFFUSE planar plate, the combined free-jet
+      plus wall-emission field of Section 3.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 5
+    manual_command: python tests/plume/plume_verification_test_33.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_34.py
+    description: >-
+      Reproduces Fig. 6: temperature contours T/T0 for the 2D slot jet
+      impinging on an inclined SPECULAR planar plate, using the paper's
+      virtual-nozzle construction (Eq. 7).
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 6
+    manual_command: python tests/plume/plume_verification_test_34.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_35.py
+    description: >-
+      Reproduces Fig. 7: 2D diffuse-plate surface pressure profiles
+      Cp,d(s) (Eq. 2) for four (S0, alpha0) combinations at Tw/T0 = 1.5.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 7
+    manual_command: python tests/plume/plume_verification_test_35.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_36.py
+    description: >-
+      Reproduces Fig. 8: 2D specular-plate surface pressure profiles
+      Cp,s(s) (Eq. 8) for four (S0, alpha0) combinations.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 8
+    manual_command: python tests/plume/plume_verification_test_36.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_37.py
+    description: >-
+      Reproduces Fig. 9: 2D diffuse-plate surface friction profiles
+      Cf,d(s) (Eq. 3), including the near-s/(2H) = -2 zero crossing the
+      paper identifies as a possible flow-separation spot.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 9
+    manual_command: python tests/plume/plume_verification_test_37.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_38.py
+    description: >-
+      Reproduces Fig. 10: 2D diffuse-plate surface heat-flux profiles
+      Cq,d(s) (Eq. 4) for four (S0, alpha0) combinations at Tw/T0 = 1.5.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 10
+    manual_command: python tests/plume/plume_verification_test_38.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_39.py
+    description: >-
+      Reproduces Fig. 15: static-pressure contours p/p0 in the Y = 0 plane
+      for the round jet impinging on an inclined DIFFUSE rectangular plate.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 15
+    manual_command: python tests/plume/plume_verification_test_39.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_test_40.py
+    description: >-
+      Reproduces Fig. 16: static-pressure contours p/p0 in the Y = 0 plane
+      for the round jet impinging on an inclined SPECULAR rectangular
+      plate, using the paper's 3D virtual-nozzle construction.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Fig. 16
+    manual_command: python tests/plume/plume_verification_test_40.py
+    collection_ignore_reason: >-
+      Manual-run figure script (design decision D5); defines no pytest
+      tests and is excluded by tests/conftest.py collect_ignore.
+
+  - path: tests/plume/plume_verification_error_summary.py
+    description: >-
+      Model-vs-model analog of Table 1: maximum relative differences in
+      density and mass flux between the analytical, simplified and Simons
+      models along the centerline and along r/D = 10 at S0 = 2.0. The DSMC
+      reference columns are emitted as "pending digitized data".
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: Cai & Wang 2012, JSR 49(1), DOI 10.2514/1.A32046, Table 1
+    manual_command: python tests/plume/plume_verification_error_summary.py
+    collection_ignore_reason: >-
+      Manual-run summary generator; its filename does not match the pytest
+      python_files patterns, so pytest never collects it.
+
+  - path: tests/plume/plume_impingement_error_summary.py
+    description: >-
+      Maximum and mean relative differences between the exact Cai 2016
+      reference surface coefficients (Eqs. 9-14) and the current PyRPOD
+      approximation chain for the inclined-plate impingement study.
+    subsystem: plume
+    category: verification
+    execution_mode: manual
+    development_status: implemented
+    collection_status: manual
+    reference: >-
+      Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043,
+      Figs. 17-21 conditions
+    manual_command: python tests/plume/plume_impingement_error_summary.py
+    collection_ignore_reason: >-
+      Manual-run summary generator; its filename does not match the pytest
+      python_files patterns, so pytest never collects it.
+
+  # ------------------------------------------------------------------- rpod
+  - path: tests/rpod/rpod_unit_test_01.py
+    description: >-
+      Converts cylinder STL data to VTK and asserts the resulting file has
+      the proper VTK data format, cell counts and point counts.
+    subsystem: rpod
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_unit_test_02.py
+    description: >-
+      Reads a jet firing history and asserts that all required keys exist
+      and that every value has the expected data type.
+    subsystem: rpod
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_unit_test_03.py
+    description: >-
+      Captures the exact file output of the three JFH printing helpers in
+      pyrpod.util.io.file_print to a temporary directory and compares it
+      against the committed tests/rpod/jfh_outputs snapshot.
+    subsystem: rpod
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_unit_test_04.py
+    description: >-
+      Unit tests for the PR #116 plume-mesh consolidation:
+      VisitingVehicle.transform_plume_mesh, the cached thruster-id map,
+      multi-digit cluster ids, stl.compose_meshes and the reusable
+      stl.transform_mesh mesh-object API, pinned against hand-computed
+      golden values.
+    subsystem: rpod
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_01.py
+    description: >-
+      Asserts the expected number of cell strikes on a flat-plate STL for a
+      notional "sweep" trajectory above it across 20 distinct firings. This
+      is the established base case for RPOD plume-impingement analysis.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_02.py
+    description: >-
+      Asserts the expected number of cell strikes on a flat-plate STL as a
+      notional visiting vehicle approaches it along a 1D-physics trajectory,
+      across 15 distinct firings.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_03.py
+    description: >-
+      Analyzes keep-out-zone impingement and asserts the expected strike
+      counts against the committed expected-strikes fixture (module header
+      marks the case "WIP").
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_04.py
+    description: >-
+      Produces hollow-cube target data and asserts the expected strike
+      counts against the committed expected-strikes fixture.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_05.py
+    description: >-
+      Runs the plume gas-kinetic models through a JFH with multiple
+      thrusters per firing (case/rpod/multi_thrusters_square). Exercises
+      graph_jfh and jfh_plume_strikes end to end but makes no assertion.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_06.py
+    description: >-
+      Performance benchmark for plume-strike computation (scalar vs
+      NumPy-vectorized geometry, serial vs process-parallel). Elapsed times
+      are printed but no speedup threshold is asserted; each benchmark
+      asserts only that the compared paths produce identical strike arrays.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_07.py
+    description: >-
+      Runs the Cai 2016 inclined-plate case through
+      PlumeStrikeEstimationStudy, converts per-face dimensional loads to
+      the paper's coefficient normalization and compares them face by face
+      against the exact reference functions evaluated at face centroids.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: >-
+      Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043,
+      Eqs. 9-13
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_integration_test_08.py
+    description: >-
+      End-to-end geometry-equivalence regressions for the PR #116
+      plume-mesh consolidation: pins the visualization pipeline's produced
+      geometry, artifact counts and file names against an inline
+      reproduction of the legacy transform/compose sequence, and proves the
+      thruster transform is applied exactly once.
+    subsystem: rpod
+    category: integration
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_verification_test_04.py
+    description: >-
+      Visualizes STLs after decoupling the thruster configuration data and
+      is intended to verify that plume strikes line up with the thrusters.
+      Exercises graph_jfh and jfh_plume_strikes but makes no assertion, so
+      the alignment must still be checked by eye in ParaView.
+    subsystem: rpod
+    category: verification
+    execution_mode: automated
+    development_status: needs_review
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_verification_test_06.py
+    description: >-
+      Cai 2016 flat-plate SWEEP verification: runs the 95-firing sweep JFH
+      (19 approach angles x 5 stand-off distances) through the strike
+      pipeline, reduces each pose to the Eq.-15 plate-averaged
+      coefficients, checks mirror symmetry in +/- alpha and compares
+      against the exact reference envelope.
+    subsystem: rpod
+    category: verification
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: >-
+      Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Eq. 15
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod/rpod_verification_test_07.py
+    description: >-
+      Cylinder-target sweep smoke test: exercises the full
+      PlumeStrikeEstimationStudy pipeline on a curved, closed target
+      (14036-face cylinder) over 19 approach angles x 5 orbit radii.
+    subsystem: rpod
+    category: verification
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
+
+  - path: tests/rpod_verification_test_05.py
+    description: >-
+      Visualizes the plume flow field using a series of target vehicles.
+    subsystem: rpod
+    category: verification
+    execution_mode: manual
+    development_status: blocked
+    collection_status: ignored
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      Listed in tests/conftest.py collect_ignore: imports the flat
+      `pyrpod.<Module>` layout that no longer exists after the
+      rpod -> plume/vehicle refactor. Excluded from collection until it is
+      fixed or removed outright.
+
+  - path: tests/test_case_25.py
+    description: >-
+      Tests the plume gas-kinetic models in JFH firings.
+    subsystem: rpod
+    category: integration
+    execution_mode: manual
+    development_status: blocked
+    collection_status: ignored
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      Listed in tests/conftest.py collect_ignore: imports the flat
+      `pyrpod.<Module>` layout that no longer exists after the
+      rpod -> plume/vehicle refactor. Excluded from collection until it is
+      fixed or removed outright.
+
+  # ---------------------------------------------------------- legacy (old/)
+  - path: tests/old/test_case_15.py
+    description: >-
+      Legacy test of the plume gas-kinetic models in JFH firings.
+    subsystem: rpod
+    category: integration
+    execution_mode: manual
+    development_status: archived
+    collection_status: archived
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      tests/old is listed in tests/conftest.py collect_ignore. Imports the
+      flat `pyrpod.<Module>` layout removed by the rpod -> plume/vehicle
+      refactor, plus a `test_header` module that no longer exists.
+
+  - path: tests/old/test_case_17.py
+    description: >-
+      Legacy test of STL-to-VTK conversion, checking the VTK data format.
+      Superseded by tests/rpod/rpod_unit_test_01.py.
+    subsystem: rpod
+    category: unit
+    execution_mode: manual
+    development_status: archived
+    collection_status: archived
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      tests/old is listed in tests/conftest.py collect_ignore. Imports the
+      flat `pyrpod.<Module>` layout removed by the rpod -> plume/vehicle
+      refactor, plus a `test_header` module that no longer exists.
+
+  - path: tests/old/test_case_19.py
+    description: >-
+      Legacy test producing hollow-cube data. Superseded by
+      tests/rpod/rpod_integration_test_04.py.
+    subsystem: rpod
+    category: integration
+    execution_mode: manual
+    development_status: archived
+    collection_status: archived
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      tests/old is listed in tests/conftest.py collect_ignore. Imports the
+      flat `pyrpod.<Module>` layout removed by the rpod -> plume/vehicle
+      refactor, plus a `test_header` module that no longer exists.
+
+  - path: tests/old/test_case_sweep_cants.py
+    description: >-
+      Legacy sweep building an array of cant-angle-swept thruster
+      configurations with symmetric pitch/yaw canting. Superseded by
+      tests/mdao/mdao_unit_test_02.py.
+    subsystem: mdao
+    category: unit
+    execution_mode: manual
+    development_status: archived
+    collection_status: archived
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      tests/old is listed in tests/conftest.py collect_ignore. Imports the
+      flat `pyrpod.<Module>` layout removed by the rpod -> plume/vehicle
+      refactor, plus a `test_header` module that no longer exists.
+
+  - path: tests/old/test_case_sweep_coords.py
+    description: >-
+      Legacy sweep building an array of axially swept thruster
+      configurations on a common ring x-coordinate.
+    subsystem: mdao
+    category: unit
+    execution_mode: manual
+    development_status: archived
+    collection_status: archived
+    reference: null
+    manual_command: null
+    collection_ignore_reason: >-
+      tests/old is listed in tests/conftest.py collect_ignore. Imports the
+      flat `pyrpod.<Module>` layout removed by the rpod -> plume/vehicle
+      refactor, plus a `test_header` module that no longer exists.
+
+  # ---------------------------------------------------------------- tooling
+  - path: tests/tooling/tooling_unit_test_01.py
+    description: >-
+      Unit tests for the test-inventory tooling itself: manifest schema
+      validation, detection of missing and stale entries, and deterministic
+      rendering of the generated tests/README.md.
+    subsystem: tooling
+    category: unit
+    execution_mode: automated
+    development_status: implemented
+    collection_status: collected
+    reference: null
+    manual_command: null
+    collection_ignore_reason: null
