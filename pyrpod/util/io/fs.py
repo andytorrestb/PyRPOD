@@ -8,8 +8,9 @@ _SHARED_DATA_DIR = _REPO_ROOT / "data"
 
 log = logging.getLogger(__name__)
 
-def resolve_asset_path(case_dir, subdir, filename, shared_subdir=None, *,
-                       required=True):
+def resolve_asset_path(case_dir: str, subdir: str, filename: str,
+                       shared_subdir: str | None = None, *,
+                       required: bool = True) -> str:
     """
     Resolve the path to a shared data asset (STL, JFH, TCD, flight plan, ...).
 
@@ -71,7 +72,7 @@ def resolve_asset_path(case_dir, subdir, filename, shared_subdir=None, *,
             f"{local_path!r} then shared {shared_path!r}")
     return local_path
 
-def ensure_dir(path):
+def ensure_dir(path: str) -> None:
     """
     Ensure that a directory exists. If it does not exist, create it.
 
@@ -97,7 +98,7 @@ def ensure_dir(path):
         except Exception:
             pass
 
-def ensure_parent_dir(file_path):
+def ensure_parent_dir(file_path: str) -> None:
     """
     Ensure that the parent directory of a file exists. If it does not exist, create it.
 

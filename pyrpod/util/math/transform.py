@@ -1,7 +1,10 @@
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
 
-def rotation_matrix_from_vectors(vec1: np.ndarray, vec2: np.ndarray) -> np.ndarray:
+def rotation_matrix_from_vectors(
+    vec1: ArrayLike, vec2: ArrayLike
+) -> NDArray[np.float64]:
     """
     Compute the 3x3 rotation matrix that rotates vec1 to align with vec2 using
     the Rodrigues' rotation formula.

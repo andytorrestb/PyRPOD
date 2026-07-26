@@ -1,7 +1,10 @@
 from stl import mesh
 import os
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import Any
 import numpy as np
+from numpy.typing import NDArray
 from pyevtk.hl import unstructuredGridToVTK
 from pyevtk.vtk import VtkTriangle
 from pyrpod.util.io.fs import ensure_parent_dir
@@ -10,7 +13,7 @@ import argparse
 import json
 
 
-def load_stl(file_path):
+def load_stl(file_path: str) -> mesh.Mesh:
     """
     Load an STL file and return a mesh object.
 
@@ -28,7 +31,12 @@ def load_stl(file_path):
         raise FileNotFoundError(f"STL file not found: {file_path}")
     return mesh.Mesh.from_file(file_path)
 
-def transform_mesh(mesh_obj, rotation_matrix=None, translation_vector=None, scale_factor=None):
+def transform_mesh(
+    mesh_obj: mesh.Mesh,
+    rotation_matrix: NDArray[np.float64] | None = None,
+    translation_vector: Sequence[float] | NDArray[np.float64] | None = None,
+    scale_factor: float | None = None,
+) -> mesh.Mesh:
     """
     Apply transformations to a mesh object.
 
@@ -57,7 +65,12 @@ def transform_mesh(mesh_obj, rotation_matrix=None, translation_vector=None, scal
     return mesh_obj
 
 
-def transform_mesh_from_file(input_file, output_file, scale, translate):
+def transform_mesh_from_file(
+    input_file: str,
+    output_file: str,
+    scale: float,
+    translate: Sequence[float] | NDArray[np.float64],
+) -> None:
     """
     Transform an STL mesh with scaling and translation and save it to a file.
 
@@ -83,7 +96,7 @@ def transform_mesh_from_file(input_file, output_file, scale, translate):
     print(f"Mesh saved to {output_file}")
 
 
-def compose_meshes(meshes):
+def compose_meshes(meshes: Iterable[mesh.Mesh]) -> mesh.Mesh:
     """Concatenate an ordered collection of numpy-stl meshes into a single mesh.
 
     This is the canonical home for generic mesh composition used by the RPOD
@@ -123,7 +136,13 @@ def compose_meshes(meshes):
     return mesh.Mesh(np.concatenate([m.data for m in meshes]))
 
 
-def convert_stl_to_vtk(surface, out_path, *, filename=None, cellData=None):
+def convert_stl_to_vtk(
+    surface: mesh.Mesh | str | Path,
+    out_path: str | os.PathLike[str],
+    *,
+    filename: str | None = None,
+    cellData: Mapping[str, NDArray[Any]] | None = None,
+) -> None:
     """
     Convert an STL mesh (or path to an STL) to a VTK unstructured grid file.
 
@@ -190,7 +209,12 @@ import json
 from stl import mesh
 import numpy as np
 
-def _transform_stl_file_cli(input_file, output_file, scale, translate):
+def _transform_stl_file_cli(
+    input_file: str,
+    output_file: str,
+    scale: float,
+    translate: Sequence[float] | NDArray[np.float64],
+) -> None:
     """Scale + translate an STL file in place from the command line.
 
     This is the file-based command-line helper invoked from ``__main__``. It
