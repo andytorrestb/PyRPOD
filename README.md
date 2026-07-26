@@ -47,6 +47,46 @@ PyRPOD utilizies scientific libraries such as NumPy, SciPy, Matplotlib, and SymP
    python -m pytest tests/rpod          # or just point pytest at a directory/file directly
    ```
 
+## Test Reporting
+
+Test information lives in two places, and the split is deliberate:
+
+| | Where | Owned by | Committed? |
+| --- | --- | --- | --- |
+| **Execution outcome** (passed / failed / skipped, for one run) | `reports/pyrpod-pytest-report.html` | pytest | No — `reports/` is git-ignored |
+| **Development status** (implemented / placeholder / blocked / ...) | [`tests/test_manifest.yaml`](tests/test_manifest.yaml) → [`tests/README.md`](tests/README.md) | maintainers | Yes |
+
+A passing test is *not* evidence that a test is finished: several placeholder
+tests contain no assertions and are explicitly skipped so they can never be
+mistaken for coverage.
+
+1. Install the reporting dependencies once (declared as the `test` dependency
+   group in `pyproject.toml`):
+   ```bash
+   python -m pip install "pytest-html>=4.2,<5" "PyYAML>=6"
+   ```
+   With pip 25.1 or newer you can instead run `python -m pip install --group test`.
+
+2. Generate the dashboard and the HTML report:
+   ```bash
+   python scripts/generate_test_dashboard.py
+   ```
+   This validates the manifest, cross-checks it against pytest's current
+   collection, regenerates `tests/README.md`, then runs the suite and writes a
+   self-contained `reports/pyrpod-pytest-report.html`. It exits with pytest's
+   own exit code, and the report is written even when tests fail. Use
+   `--inventory-only` to refresh `tests/README.md` without running the suite,
+   or `--check` to verify it is up to date.
+
+3. When you add a test, add a matching entry to `tests/test_manifest.yaml`.
+   The generator fails with an explicit list of missing or stale entries
+   otherwise.
+
+CI runs the same command on every pull request and every push to `master`, and
+uploads the report as the **`pyrpod-test-report`** artifact (retained 14 days),
+including when tests fail. Download it from the *Artifacts* section of the
+workflow run summary on the Actions tab.
+
 ## Logging
 
 PyRPOD ships a formal, opt-in operational logging system built entirely on the

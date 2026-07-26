@@ -18,6 +18,7 @@
 
 import unittest, os, sys
 import numpy as np
+import pytest
 
 from pyrpod.rpod import JetFiringHistory, PlumeStrikeEstimationStudy
 from pyrpod.vehicle import TargetVehicle, VisitingVehicle
@@ -25,6 +26,10 @@ from pyrpod.mdao import SweepConfig
 
 
 class CoordinateSweepCheck(unittest.TestCase):
+    @pytest.mark.skip(
+        reason="Placeholder: the entire test body is commented out, so it "
+        "asserts nothing (see tests/test_manifest.yaml)."
+    )
     def test_cant_sweep(self):
 
         # # number of deceleration thrusters to evenly distribute

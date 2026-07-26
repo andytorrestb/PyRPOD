@@ -11,7 +11,13 @@
 
 import unittest
 
+import pytest
+
 class MDAOTest(unittest.TestCase):
+    @pytest.mark.skip(
+        reason="Placeholder: the test body returns immediately and asserts "
+        "nothing (see tests/test_manifest.yaml)."
+    )
     def test_mdao(self):
         # print("plume integration test")
         return

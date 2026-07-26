@@ -10,9 +10,15 @@
 # TODO: Re-factor code to save data in a relevant object. Also add files to save to.
 
 import unittest, os, sys
+import pytest
 from pyrpod.plume import IsentropicExpansion
 
 class IsentropicExpansionCheck(unittest.TestCase):
+    @pytest.mark.skip(
+        reason="Placeholder: both plotting calls are commented out, leaving "
+        "only object construction, so the test asserts nothing "
+        "(see tests/test_manifest.yaml)."
+    )
     def test_temp_vs_radial_expansion(self):
 
         #define flow and sonic properties.

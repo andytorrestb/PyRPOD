@@ -11,10 +11,16 @@
 
 import unittest
 
+import pytest
+
 from pyrpod.vehicle import TargetVehicle, LogisticsModule
 from pyrpod.mdao import TradeStudy
 
 class MDAOTest(unittest.TestCase):
+    @pytest.mark.skip(
+        reason="Placeholder: the entire test body is commented out, so it "
+        "asserts nothing (see tests/test_manifest.yaml)."
+    )
     def test_mdao(self):
 
     # # 1. Set Up

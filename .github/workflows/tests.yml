@@ -16,7 +16,24 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install --group test
 
-      - name: Run tests
-        run: pytest
+      # Validates tests/test_manifest.yaml, regenerates tests/README.md, then
+      # runs pytest with pytest-html. Exits with pytest's own exit code, so a
+      # test failure still fails this job -- after the report is uploaded.
+      - name: Run tests and generate report
+        run: python scripts/generate_test_dashboard.py
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyrpod-test-report
+          path: |
+            reports/pyrpod-pytest-report.html
+            reports/logs/
+          retention-days: 14
+          if-no-files-found: warn

@@ -48,8 +48,15 @@ PyRPOD uses [pytest](https://docs.pytest.org/) to ensure stability and prevent r
 
 1. Write tests for your contributions in the `tests` directory, following the existing `<group>_<category>_test_NN.py` naming convention (e.g. `rpod_unit_test_04.py`).
 2. Run the full suite locally with `pytest` from the repository root before submitting a pull request.
-3. Tests are automatically tagged with `unit`, `integration`, `verification`, and subsystem (`mdao`, `mission`, `plume`, `rpod`) markers based on their filename, so you can run a subset with e.g. `pytest -m unit` or `pytest -m rpod`.
-4. CI runs the same `pytest` suite automatically on every push and pull request via [GitHub Actions](.github/workflows/tests.yml).
+3. Tests are automatically tagged with `unit`, `integration`, `verification`, and subsystem (`logging`, `mdao`, `mission`, `plume`, `rpod`, `tooling`) markers based on their filename, so you can run a subset with e.g. `pytest -m unit` or `pytest -m rpod`.
+4. **Add a matching entry to [`tests/test_manifest.yaml`](tests/test_manifest.yaml)** describing the new file, then regenerate the inventory:
+   ```bash
+   python -m pip install "pytest-html>=4.2,<5" "PyYAML>=6"   # once
+   python scripts/generate_test_dashboard.py
+   ```
+   Commit the regenerated `tests/README.md` alongside your test. The generator fails with an explicit list of missing or stale entries if the manifest and pytest's collection disagree.
+5. Record the *development* status (`implemented`, `placeholder`, `needs_review`, `blocked`, `archived`, `deprecated`) in the manifest — never a pass/fail result. Execution outcomes live only in the run-specific `reports/pyrpod-pytest-report.html`, which is git-ignored. A test with no assertions is a `placeholder`; skip it explicitly so it cannot be mistaken for coverage.
+6. CI runs the same command automatically on every push and pull request via [GitHub Actions](.github/workflows/tests.yml), and uploads the HTML report as the `pyrpod-test-report` artifact even when tests fail.
 
 ## Code Formatting
 
