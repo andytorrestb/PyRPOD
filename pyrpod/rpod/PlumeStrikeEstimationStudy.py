@@ -15,7 +15,7 @@ from pyrpod.plume.RarefiedPlumeGasKinetics import SimplifiedGasKinetics
 
 from pyrpod.util.io.file_print import print_1d_JFH
 from pyrpod.util.io.fs import ensure_dir, resolve_asset_path
-from pyrpod.util.stl.stl import load_stl, transform_mesh
+from pyrpod.util.stl.stl import load_stl, transform_mesh, compose_meshes
 
 from queue import Queue
 
@@ -211,20 +211,20 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             Does the method need to return a status message? or pass similar data?
         """
 
-        # Link JFH numbering of thrusters to thruster names.  
-        link = {}
-        i = 1
-        for thruster in self.vv.thruster_data:
-            link[str(i)] = self.vv.thruster_data[thruster]['name']
-            i = i + 1
+        # JFH numeric thruster indices are resolved to canonical thruster ids
+        # via the cached mapping owned by the visiting vehicle
+        # (VisitingVehicle.get_thruster_id) rather than rebuilt here.
 
         # Loop through each firing in the JFH.
         for firing in range(len(self.jfh.JFH)):
 
-            # Save active thrusters for current firing. 
+            # Save active thrusters for current firing.
             thrusters = self.jfh.JFH[firing]['thrusters']
-            
-            # Load and graph STL of visting vehicle.  
+
+            # Fixed demo geometry for the RCS sanity check. These paths select
+            # dedicated check STLs (cylinder/mold_funnel), NOT the case's
+            # configured LM/thruster STLs, so they are intentionally left as
+            # literal paths rather than routed through resolve_asset_path.
             VVmesh = load_stl('../stl/cylinder.stl')
 
             figure = plt.figure()
@@ -232,10 +232,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             axes = figure.add_subplot(projection = '3d')
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(VVmesh.vectors))
  
-            # Load and graph STLs of active thrusters. 
+            # Load and graph STLs of active thrusters.
             for thruster in thrusters:
                 # Map thruster ID
-                thruster_id = link[str(thruster)][0]
+                thruster_id = self.vv.get_thruster_id(thruster)
 
                 # Load plume STL in initial configuration.
                 plumeMesh = load_stl('../stl/mold_funnel.stl')
@@ -254,12 +254,11 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
                     scale_factor=0.05
                 )
 
-                # Transform plume according to thruster and VV configuration.
-                plumeMesh = transform_mesh(
-                    plumeMesh,
-                    rotation_matrix=np.array(self.vv.thruster_data[thruster_id]['dcm']).T,
-                    translation_vector=self.vv.thruster_data[thruster_id]['exit'][0]
-                )
+                # Place the plume at the thruster (local placement: thruster DCM
+                # + thruster exit only -- no vehicle/JFH pose, no cluster).
+                # Routed through the canonical transform_plume_mesh so the
+                # thruster DCM and exit are applied exactly once each.
+                plumeMesh = self.vv.transform_plume_mesh(thruster_id, plumeMesh)
 
                 logger.debug("Thruster %s DCM: %s", thruster_id, self.vv.thruster_data[thruster_id]['dcm'])
 
@@ -305,7 +304,6 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             active_clusters : mesh
                 Cluster of the current thruster firing.
         """
-        active_clusters = None
         clusters_list = []
         for number in range(len(self.vv.cluster_data)):
             cluster_name = 'P' + str(number + 1)
@@ -313,10 +311,11 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             clusters_list.append(cluster_name)
 
         # print('clusters_list is', clusters_list)
-        # Load and graph STLs of active clusters. 
+        # Load and graph STLs of active clusters.
+        cluster_meshes = []
         for cluster in clusters_list:
 
-            # Load plume STL in initial configuration. 
+            # Load plume STL in initial configuration.
             clusterMesh = mesh.Mesh.from_file(resolve_asset_path(self.environment.case_dir, 'stl', self.environment.config['vv']['stl_cluster']))
 
             # Transform cluster
@@ -337,13 +336,12 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             clusterMesh.translate(self.vv.cluster_data[cluster]['exit'][0])
             # print(self.vv.cluster_data[cluster]['exit'][0])
 
-            if active_clusters == None:
-                active_clusters = clusterMesh
-            else:
-                active_clusters = mesh.Mesh(
-                    np.concatenate([active_clusters.data, clusterMesh.data])
-                )
-        return active_clusters
+            cluster_meshes.append(clusterMesh)
+
+        # No clusters configured -> no cluster geometry (legacy returned None).
+        if not cluster_meshes:
+            return None
+        return compose_meshes(cluster_meshes)
 
     def graph_jfh(self, trade_study = False): 
         """
@@ -358,13 +356,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             Method doesn't currently return anything. Simply produces data as needed.
             Does the method need to return a status message? or pass similar data?
         """
-        # Link JFH numbering of thrusters to thruster names.  
-        link = {}
-        i = 1
-        for thruster in self.vv.thruster_data:
-            link[str(i)] = self.vv.thruster_data[thruster]['name']
-            i = i + 1
-        
+        # JFH numeric thruster indices are resolved to canonical thruster ids
+        # via the cached mapping owned by the visiting vehicle
+        # (VisitingVehicle.get_thruster_id) rather than rebuilt here.
+
         # Create results directory if it doesn't already exist.
         results_dir = self.environment.case_dir + 'results'
         ensure_dir(results_dir)
@@ -404,73 +399,47 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             VVmesh.rotate_using_matrix(vv_orientation.transpose())
             VVmesh.translate(self.jfh.JFH[firing]['xyz'])
 
+            # Optional per-firing mesh components are initialized explicitly
+            # (not probed with locals()) so composition below is unambiguous.
             active_cones = None
+            active_clusters = None
 
             # Load and graph STLs of active clusters.
             if self.vv.use_clusters == True:
                 active_clusters = self.graph_clusters(firing, vv_orientation)
 
-            # Load and graph STLs of active thrusters. 
+            # Load and place the plume STL for each active thruster. The exact
+            # legacy placement sequence (thruster DCM, VV orientation, VV
+            # position, cluster offset, thruster exit) is owned by
+            # VisitingVehicle.transform_plume_mesh.
+            plume_meshes = []
             for thruster in thrusters:
+                thruster_id = self.vv.get_thruster_id(thruster)
 
-
-                # Save thruster id using indexed thruster value.
-                # Could naming/code be more clear?
-                # print('thruster num', thruster, 'thruster id', link[str(thruster)][0])
-                thruster_id = link[str(thruster)][0]
-
-                # Load plume STL in initial configuration. 
+                # Load plume STL in initial configuration.
                 plumeMesh = mesh.Mesh.from_file(resolve_asset_path(self.environment.case_dir, 'stl', self.environment.config['vv']['stl_thruster']))
 
-                # Transform plume
-                
-                # First, according to DCM of current thruster id in TCF
-                thruster_orientation = np.array(
-                    self.vv.thruster_data[thruster_id]['dcm']
+                plumeMesh = self.vv.transform_plume_mesh(
+                    thruster_id, plumeMesh,
+                    vv_orientation=vv_orientation,
+                    vv_position=self.jfh.JFH[firing]['xyz'],
                 )
-                plumeMesh.rotate_using_matrix(thruster_orientation.transpose())
 
-                # Second, according to DCM of VV in JFH
-                plumeMesh.rotate_using_matrix(vv_orientation.transpose())
+                plume_meshes.append(plumeMesh)
 
-                # Third, according to position vector of the VV in JFH
-                plumeMesh.translate(self.jfh.JFH[firing]['xyz'])
-                
-                # Fourth, according to position of current cluster in CCF
+            if plume_meshes:
+                active_cones = compose_meshes(plume_meshes)
+
+            # Combine the VV body with the active plume cones and, when clusters
+            # are enabled, the cluster geometry. When there are no active cones
+            # the VV body is emitted unchanged and cluster geometry is
+            # intentionally omitted -- exactly as legacy behavior did.
+            components = [VVmesh]
+            if active_cones is not None:
+                components.append(active_cones)
                 if self.vv.use_clusters == True:
-                    # thruster_id[0] = "P" and thruster_id[1] = "#", adding these gives the cluster identifier
-                    plumeMesh.translate(self.vv.cluster_data[thruster_id[0] + thruster_id[1]]['exit'][0])
-
-                # Fifth, according to exit vector of current thruster id in TCD
-                plumeMesh.translate(self.vv.thruster_data[thruster_id]['exit'][0])
-
-                # Takeaway: Do rotations before translating away from the rotation axes!   
-
-
-                if active_cones == None:
-                    active_cones = plumeMesh
-                else:
-                    active_cones = mesh.Mesh(
-                        np.concatenate([active_cones.data, plumeMesh.data])
-                    )
-
-                # print('DCM: ', self.vv.thruster_data[thruster_id]['dcm'])
-                # print('DCM: ', thruster_orientation[0], thruster_orientation[1], thruster_orientation[2])
-
-            if self.vv.use_clusters != True:
-                if not active_cones == None:
-                    VVmesh = mesh.Mesh(
-                        np.concatenate([VVmesh.data, active_cones.data])
-                    )
-            if self.vv.use_clusters == True:
-                if not active_cones == None:
-                    VVmesh = mesh.Mesh(
-                        np.concatenate([VVmesh.data, active_cones.data, active_clusters.data])
-                    )
-            
-            # print(self.vv.mesh)
-
-            # print(self.environment.case_dir + self.environment.config['stl']['vv'])
+                    components.append(active_clusters)
+            VVmesh = compose_meshes(components)
 
             if trade_study == False:
                 path_to_stl = os.path.join(self.environment.case_dir, "results", "jfh", f"firing-{firing}.stl")
@@ -517,13 +486,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             Method doesn't currently return anything. Simply produces data as needed.
             Does the method need to return a status message? or pass similar data?
         """
-        # Link JFH numbering of thrusters to thruster names.  
-        link = {}
-        i = 1
-        for thruster in self.vv.thruster_data:
-            link[str(i)] = self.vv.thruster_data[thruster]['name']
-            i = i + 1
-        # print('link is', link)
+        # JFH numeric thruster indices are resolved to canonical thruster ids
+        # via the cached mapping owned by the visiting vehicle
+        # (VisitingVehicle.get_thruster_id) rather than rebuilt here.
 
         # Create results directory if it doesn't already exist.
         results_dir = self.environment.case_dir + 'results'
@@ -550,73 +515,47 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             VVmesh.rotate_using_matrix(vv_orientation.transpose())
             VVmesh.translate(self.jfh.JFH[firing]['xyz'])
 
+            # Optional per-firing mesh components are initialized explicitly
+            # (not probed with locals()) so composition below is unambiguous.
             active_cones = None
+            active_clusters = None
 
             # Load and graph STLs of active clusters.
             if self.vv.use_clusters == True:
                 active_clusters = self.graph_clusters(firing, vv_orientation)
 
-            # Load and graph STLs of active thrusters. 
+            # Load and place the plume STL for each active thruster. The exact
+            # legacy placement sequence (thruster DCM, VV orientation, VV
+            # position, cluster offset, thruster exit) is owned by
+            # VisitingVehicle.transform_plume_mesh.
+            plume_meshes = []
             for thruster in thrusters:
+                thruster_id = self.vv.get_thruster_id(thruster)
 
-                thruster_id = link[str(thruster)][0]
-
-                # Save thruster id using indexed thruster value.
-                # Could naming/code be more clear?
-                # print('thruster num', thruster, 'thruster id', link[str(thruster)][0])
-
-                # Load plume STL in initial configuration. 
+                # Load plume STL in initial configuration.
                 plumeMesh = mesh.Mesh.from_file(resolve_asset_path(self.environment.case_dir, 'stl', self.environment.config['vv']['stl_thruster']))
 
-                # Transform plume
-                
-                # First, according to DCM of current thruster id in TCF
-                thruster_orientation = np.array(
-                    self.vv.thruster_data[thruster_id]['dcm']
+                plumeMesh = self.vv.transform_plume_mesh(
+                    thruster_id, plumeMesh,
+                    vv_orientation=vv_orientation,
+                    vv_position=self.jfh.JFH[firing]['xyz'],
                 )
-                plumeMesh.rotate_using_matrix(thruster_orientation.transpose())
 
-                # Second, according to DCM of VV in JFH
-                plumeMesh.rotate_using_matrix(vv_orientation.transpose())
+                plume_meshes.append(plumeMesh)
 
-                # Third, according to position vector of the VV in JFH
-                plumeMesh.translate(self.jfh.JFH[firing]['xyz'])
-                
-                # Fourth, according to position of current cluster in CCF
+            if plume_meshes:
+                active_cones = compose_meshes(plume_meshes)
+
+            # Combine the VV body with the active plume cones and, when clusters
+            # are enabled, the cluster geometry. When there are no active cones
+            # the VV body is emitted unchanged and cluster geometry is
+            # intentionally omitted -- exactly as legacy behavior did.
+            components = [VVmesh]
+            if active_cones is not None:
+                components.append(active_cones)
                 if self.vv.use_clusters == True:
-                    # thruster_id[0] = "P" and thruster_id[1] = "#", adding these gives the cluster identifier
-                    plumeMesh.translate(self.vv.cluster_data[thruster_id[0] + thruster_id[1]]['exit'][0])
-
-                # Fifth, according to exit vector of current thruster id in TCD
-                plumeMesh.translate(self.vv.thruster_data[thruster_id]['exit'][0])
-
-                # Takeaway: Do rotations before translating away from the rotation axes!   
-
-
-                if active_cones == None:
-                    active_cones = plumeMesh
-                else:
-                    active_cones = mesh.Mesh(
-                        np.concatenate([active_cones.data, plumeMesh.data])
-                    )
-
-                # print('DCM: ', self.vv.thruster_data[thruster_id]['dcm'])
-                # print('DCM: ', thruster_orientation[0], thruster_orientation[1], thruster_orientation[2])
-
-            if self.vv.use_clusters != True:
-                if not active_cones == None:
-                    VVmesh = mesh.Mesh(
-                        np.concatenate([VVmesh.data, active_cones.data])
-                    )
-            if self.vv.use_clusters == True:
-                if not active_cones == None:
-                    VVmesh = mesh.Mesh(
-                        np.concatenate([VVmesh.data, active_cones.data, active_clusters.data])
-                    )
-            
-            # print(self.vv.mesh)
-
-            # print(self.environment.case_dir + self.environment.config['stl']['vv'])
+                    components.append(active_clusters)
+            VVmesh = compose_meshes(components)
 
             if self.count > 0:
                 path_to_vtk = os.path.join(self.environment.case_dir, "results", "strikes", f"firing-{self.count}-{firing}")
