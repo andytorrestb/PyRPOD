@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pyrpod.mission.state_vectors import StateVectors
 from pyrpod.mission.six_dof_dynamics import SixDOFDynamics
 from pyrpod.mission.fuel_management import FuelManager
@@ -11,11 +9,8 @@ from pyrpod.mission.post_processing import PostProcessor
 from pyrpod.mission.orbital_transfer import OrbitalTransferEngine
 from pyrpod.mission.MissionEnvironment import MissionEnvironment
 
-if TYPE_CHECKING:
-    # Type-only: importing these eagerly would add a runtime import edge from
-    # the planner to the vehicle/rpod packages that does not exist today.
-    from pyrpod.rpod.JetFiringHistory import JetFiringHistory as JetFiringHistoryType
-    from pyrpod.vehicle.LogisticsModule import LogisticsModule as LogisticsModuleType
+from pyrpod.rpod.JetFiringHistory import JetFiringHistory as JetFiringHistoryType
+from pyrpod.vehicle.LogisticsModule import LogisticsModule as LogisticsModuleType
 
 
 class MissionPlanner:

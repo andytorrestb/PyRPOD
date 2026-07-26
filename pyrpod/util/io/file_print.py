@@ -7,19 +7,17 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    import numpy as np
-    from numpy.typing import NDArray
+import numpy as np
+from numpy.typing import NDArray
 
-    # These helpers do no NumPy work themselves, so numpy stays a type-only
-    # import here. Callers pass either Python lists of per-axis rows
-    # (JetFiringHistory builds ``r = [x, y, z]`` and a list of rotation
-    # matrices) or NumPy arrays of the same shape, so the accurate bound is
-    # "indexable rows" rather than one concrete container type.
-    _Times = Sequence[float] | NDArray[np.float64]
-    _Rows = Sequence[Any] | NDArray[Any]
+# Callers pass either Python lists of per-axis rows (JetFiringHistory builds
+# ``r = [x, y, z]`` and a list of rotation matrices) or NumPy arrays of the
+# same shape, so the accurate bound is "indexable rows" rather than one
+# concrete container type.
+_Times = Sequence[float] | NDArray[np.float64]
+_Rows = Sequence[Any] | NDArray[Any]
 
 
 def print_JFH(t_values: _Times, r: _Rows, rot: _Rows, file_name: str) -> None:

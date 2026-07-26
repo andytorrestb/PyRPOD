@@ -11,6 +11,9 @@ from pyrpod.mission.SubModule import SubModule
 from pyrpod.mission.six_dof_dynamics import SixDOFDynamics
 from pyrpod.util.io.fs import resolve_asset_path
 
+# This one MUST stay type-only. MissionPlanner imports FlightEvaluator at
+# module level, so a real import here closes the cycle and raises ImportError
+# on a partially initialized module in either direction.
 if TYPE_CHECKING:
     from pyrpod.mission.MissionPlanner import MissionPlanner
 

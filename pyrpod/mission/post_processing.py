@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import logging
-
-if TYPE_CHECKING:
-    # Type-only: this module does no pandas work itself, it only reads a
-    # DataFrame handed to it by the owning object.
-    import pandas as pd
 
 logger = logging.getLogger(__name__)
 

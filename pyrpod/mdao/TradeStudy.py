@@ -5,7 +5,7 @@ import csv
 import time
 import logging
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -16,9 +16,8 @@ from pyrpod.mdao import SweepConfig
 from pyrpod.util.io.fs import ensure_dir
 import configparser
 
-if TYPE_CHECKING:
-    from pyrpod.vehicle.LogisticsModule import LogisticsModule
-    from pyrpod.vehicle.TargetVehicle import TargetVehicle
+from pyrpod.vehicle.LogisticsModule import LogisticsModule
+from pyrpod.vehicle.TargetVehicle import TargetVehicle
 
 logger = logging.getLogger(__name__)
 

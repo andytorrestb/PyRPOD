@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -47,16 +47,13 @@ from pyrpod.plume.PlumeStrikeCalculator import (
     run_parallel_plume_strikes,
 )
 
-if TYPE_CHECKING:
-    # Type-only: study_init receives these objects but the module has
-    # never imported them at runtime (the parameter names shadow the
-    # class names).
-    from pyrpod.rpod.JetFiringHistory import (
-        JetFiringHistory as JetFiringHistoryType,
-    )
-    from pyrpod.vehicle.TargetVehicle import (
-        TargetVehicle as TargetVehicleType,
-    )
+# Aliased because study_init's parameter names shadow the class names.
+from pyrpod.rpod.JetFiringHistory import (
+    JetFiringHistory as JetFiringHistoryType,
+)
+from pyrpod.vehicle.TargetVehicle import (
+    TargetVehicle as TargetVehicleType,
+)
 
 logger = logging.getLogger(__name__)
 
