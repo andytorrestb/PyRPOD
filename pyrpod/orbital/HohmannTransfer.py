@@ -1,9 +1,17 @@
+from __future__ import annotations
+
+from typing import Any
+
 from astropy import units as u
 from astropy.constants import G, R_earth, M_earth
 import numpy as np
 
 class HohmannTransfer:
-    def __init__(self, r1_km: float, r2_km: float, leg_id: str = ""):
+    # leg_id was annotated ``str = ""``, but OrbitalTransferEngine passes None
+    # for an unnamed leg and the ``or`` below is what supplies the fallback
+    # label, so None has always been accepted at runtime.
+    def __init__(self, r1_km: float, r2_km: float,
+                 leg_id: str | None = "") -> None:
         self.leg_id = leg_id or f"{r1_km} km → {r2_km} km"
         self.r1_km = r1_km
         self.r2_km = r2_km
@@ -20,7 +28,7 @@ class HohmannTransfer:
 
         self._compute_transfer()
 
-    def _compute_transfer(self):
+    def _compute_transfer(self) -> dict[str, Any]:
         # Circular speeds
         self.v1_circ = np.sqrt(self.mu_earth / self.r1)
         self.v2_circ = np.sqrt(self.mu_earth / self.r2)
@@ -42,7 +50,7 @@ class HohmannTransfer:
 
         return self.summary(verbose=False)
 
-    def summary(self, verbose=True) -> dict:
+    def summary(self, verbose: bool = True) -> dict[str, Any]:
         if verbose:
             print(f"\n=== Hohmann Transfer: {self.leg_id} ===")
             print(f"Initial altitude: {self.r1_km} km → Radius: {self.r1.to(u.km):.2f}")

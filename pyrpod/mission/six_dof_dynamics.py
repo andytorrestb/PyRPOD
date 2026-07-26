@@ -1,21 +1,32 @@
+from __future__ import annotations
+
+from typing import Any
+
+
 class SixDOFDynamics:
     # def __init__(self):
         # self.thruster_model = thruster_model
 
-    def evaluate_translational(self, dv):
+    # Supplied by whichever object mixes this class in (FlightEvaluator sets
+    # it in read_flight_plan); SixDOFDynamics never constructs it itself.
+    vv: Any
+
+    def evaluate_translational(self, dv: Any) -> None:
         # Placeholder logic for translational maneuver
         pass
 
-    def evaluate_rotational(self, dw):
+    def evaluate_rotational(self, dw: Any) -> None:
         # Placeholder logic for rotational maneuver
         pass
 
-    def evaluate(self, dv, dw):
+    def evaluate(self, dv: Any, dw: Any) -> None:
         # Combined 6DOF evaluation logic
         self.evaluate_translational(dv)
         self.evaluate_rotational(dw)
 
-    def calc_trans_performance(self, motion, dv):
+    def calc_trans_performance(
+        self, motion: str, dv: float
+    ) -> tuple[float, float, float] | None:
         """
             Calculates RCS performance according to thruster working groups for a direction of motion.
 
@@ -48,7 +59,11 @@ class SixDOFDynamics:
         # print(self.vv)
         if self.vv.rcs_groups == None:
             # print("WARNING: Thruster Grouping File not Set")
-            return
+            # mypy asks for an explicit `return None` whenever the declared
+            # return type is not plain None, even when None is part of the
+            # union. A bare return and `return None` compile identically, so
+            # the source is left as-is rather than edited for the checker.
+            return  # type: ignore[return-value]
 
         n_thrusters = len(self.vv.rcs_groups[motion])
         total_thrust = n_thrusters * self.vv.thrust

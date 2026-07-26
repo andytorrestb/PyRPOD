@@ -1,22 +1,42 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
+
+if TYPE_CHECKING:
+    # Type-only: this module does no pandas work itself, it only reads a
+    # DataFrame handed to it by the owning object.
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 
 class PostProcessor:
-    def __init__(self):
+    # Collaborator state and helpers the plotting methods read but this class
+    # never defines; they come from the object that owns the post-processor
+    # (see MissionPlanner, FuelManager and SixDOFDynamics). Declared bare so no
+    # class attribute is created at runtime.
+    vv: Any
+    flight_plan: pd.DataFrame
+    calc_burn_time: Callable[[float, float, float], float]
+    calc_delta_mass: Callable[[float, float], float]
+    calc_trans_performance: Callable[[str, Any], tuple[float, float, float]]
+
+    def __init__(self) -> None:
         pass
 
-    def plot_burn_profiles(self):
+    def plot_burn_profiles(self) -> None:
         # Stub plot for burn times
         pass
 
-    def plot_mass_usage(self):
+    def plot_mass_usage(self) -> None:
         # Stub plot for fuel usage
         pass
-    def plot_burn_time(self, dv):
+    def plot_burn_time(self, dv: float) -> None:
         """
             Plots burn time for a given dv and isp value. Varies thrust according to user inputs.
 
@@ -41,7 +61,11 @@ class PostProcessor:
         """
         isp_vals = [50, 200, 300, 400, 500]
         thrust_range = np.linspace(50, 600, 5000)
-        burn_time = []
+        # These plotting accumulators start as a Python list and are then
+        # rebound to the NumPy array built from them. A list|NDArray union does
+        # not survive mypy's loop binder (it widens back at the loop edge and
+        # rejects .append), so the rebound locals in this module stay dynamic.
+        burn_time: Any = []
 
         isp = 200
         for thrust in thrust_range:
@@ -60,7 +84,7 @@ class PostProcessor:
         # plt.yscale("log")
         fig.savefig("test.png")
 
-    def plot_burn_time_contour(self, dv):
+    def plot_burn_time_contour(self, dv: float) -> None:
         """
             Plots burn time for a given dv by varrying thrust values. Graph is contoured using ISP values.
 
@@ -82,7 +106,7 @@ class PostProcessor:
         fig, ax = plt.subplots()
 
         for isp in isp_vals:
-            burn_time = []
+            burn_time: Any = []
             for thrust in thrust_range:
                 burn_time.append(abs(self.calc_burn_time(dv, isp, thrust)))
             burn_time = np.array(burn_time) / (3600*24)
@@ -97,7 +121,7 @@ class PostProcessor:
         fig.savefig("test.png")
         return
 
-    def plot_burn_time_flight_plan(self):
+    def plot_burn_time_flight_plan(self) -> None:
         """
             Plots burn time for all dv maneuvers in the specified flight plan.
 
@@ -121,7 +145,7 @@ class PostProcessor:
             # print(type(v[1]))
             dv = v[1][1]
             logger.debug('Processing dv entry in flight plan')
-            burn_time = []
+            burn_time: Any = []
             for thrust in thrust_range:
                 burn_time.append(abs(self.calc_burn_time(dv, isp, thrust)))
             burn_time = np.array(burn_time) / (3600*24)
@@ -137,7 +161,7 @@ class PostProcessor:
 
         return
 
-    def plot_delta_mass(self, dv):
+    def plot_delta_mass(self, dv: float) -> None:
         """
             Plots propellant usage for a given dv requirements by varying ISP according to user inputs.
 
@@ -152,7 +176,7 @@ class PostProcessor:
             Does the method need to return a status message? or pass similar data?
         """
         isp_range = np.linspace(100, 600, 5000)
-        delta_mass = []
+        delta_mass: Any = []
 
         for isp in isp_range:
             delta_mass.append(abs(self.calc_delta_mass(dv, isp)))
@@ -186,7 +210,7 @@ class PostProcessor:
         # plt.yscale("log")
         fig.savefig("test.png")
 
-    def plot_delta_mass_contour(self):
+    def plot_delta_mass_contour(self) -> None:
     
         """
             Co-Plots propellant usage for all dv maneuvers in the specified flight plan.
@@ -204,8 +228,8 @@ class PostProcessor:
         #creat plotting object.
         fig, ax = plt.subplots()
 
-        delta_mass_min = 10e9
-        delta_mass_max = 0
+        delta_mass_min: float = 10e9
+        delta_mass_max: float = 0
 
         # Step through all planned firings in the flight plan
         for firing in self.flight_plan.iterrows():
@@ -214,7 +238,7 @@ class PostProcessor:
 
             # Calculate change in mass for a given range of ISP values.
             isp_range = np.linspace(50, 400, 5000)
-            delta_mass = []
+            delta_mass: Any = []
 
             for isp in isp_range:
                 delta_mass.append(abs(self.calc_delta_mass(dv, isp)))
@@ -259,7 +283,7 @@ class PostProcessor:
         fig.savefig("test.png")
         return
 
-    def plot_thrust_envelope(self):
+    def plot_thrust_envelope(self) -> None:
         """
             Plots operational envelope relating burn time to thrust required for all firings in the flight plan.
 

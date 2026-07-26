@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from pyrpod.orbital import HohmannTransfer
 from astropy import units as u
 import logging
@@ -5,21 +9,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 class OrbitalTransferEngine:
-    def __init__(self):
-        self.transfers = []
+    def __init__(self) -> None:
+        self.transfers: list[Any] = []
 
-    def add_hohmann_transfer(self, h1, h2):
+    def add_hohmann_transfer(self, h1: float, h2: float) -> None:
         # Add a Hohmann transfer case
         pass
 
-    def summarize(self):
+    def summarize(self) -> None:
         # Print or return summary
         pass
 
-    def init_hohmann_transfers(self):
-        self.hohmann_transfers = []
+    def init_hohmann_transfers(self) -> None:
+        self.hohmann_transfers: list[dict[str, Any]] = []
 
-    def add_hohmann_transfer(self, h1_km: float, h2_km: float, leg_id: str = None):
+    # The stub above is dead: this definition unconditionally shadows it at
+    # class-creation time, and it is the one every caller reaches. Removing
+    # the stub is a code change, which #103 excludes, so the shadowing is
+    # flagged here instead (see the report's deferred observations).
+    def add_hohmann_transfer(  # type: ignore[no-redef]
+        self, h1_km: float, h2_km: float, leg_id: str | None = None
+    ) -> None:
         """
         Computes and stores the delta-v and time of flight for a Hohmann transfer leg.
 
@@ -36,7 +46,7 @@ class OrbitalTransferEngine:
             result['leg_id'] = leg_id
         self.hohmann_transfers.append(result)
 
-    def summarize_hohmann_transfers(self):
+    def summarize_hohmann_transfers(self) -> None:
         """
         Prints a summary of all stored Hohmann transfers.
         """
