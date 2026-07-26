@@ -35,11 +35,12 @@ from __future__ import annotations
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, overload
 
 import numpy as np
 from pyrpod.plume.RarefiedPlumeGasKinetics import (
     AVOGADROS_NUMBER,
+    Scalar,
     SimplifiedGasKinetics,
     get_maxwellian_heat_transfer,
     get_maxwellian_pressure,
@@ -47,8 +48,9 @@ from pyrpod.plume.RarefiedPlumeGasKinetics import (
 )
 
 
-def _surface_loads_with_incidence(simple_plume: SimplifiedGasKinetics,
-                                  incidence: float):
+def _surface_loads_with_incidence(
+    simple_plume: SimplifiedGasKinetics, incidence: Scalar
+) -> Tuple[float, float, float]:
     """Maxwellian surface loads for a struck face at the true incidence angle.
 
     simple_plume carries the plume-field state at the face's position (its
@@ -216,7 +218,11 @@ def _compute_plume_strikes_core(
             T_w = plume_params['surface_temp']
             sigma = plume_params['sigma']
             t_type = thruster_data[thruster_id]['type'][0]
-            metrics = thruster_metrics[t_type]
+            # thruster_metrics is Optional because compute_plume_strikes passes
+            # getattr(vv, 'thruster_metrics', None); it is only ever read on
+            # this branch, which use_kinetics already gates, but that pairing
+            # is a caller invariant the signature cannot express.
+            metrics = thruster_metrics[t_type]  # type: ignore[index]
             # True incidence angle between the local (radial) flow direction
             # -unit_distance and the face unit normal; fed to the wall
             # formulas in place of the positional theta (see module header).
@@ -408,7 +414,9 @@ def _parallel_worker_init(
     _WORKER_STATE['plume_params'] = plume_params
 
 
-def _parallel_worker_compute(task) -> Any:
+def _parallel_worker_compute(
+    task: Tuple[int, Dict[str, Any]],
+) -> Tuple[int, Dict[str, np.ndarray], Dict[str, Any]]:
     """Compute strikes for one firing inside a worker process.
 
     task is (firing_index, jfh_step); returns
@@ -436,6 +444,38 @@ def _parallel_worker_compute(task) -> Any:
     return firing_index, result, meta
 
 
+# The return shape is selected entirely by return_meta, so overloads let
+# callers keep the precise type instead of unpacking a union at every use.
+@overload
+def run_parallel_plume_strikes(
+    jfh_steps: Sequence[Dict[str, Any]],
+    face_centroids: np.ndarray,
+    target_unit_normals: np.ndarray,
+    thruster_data: Dict[str, Any],
+    thruster_metrics: Optional[Dict[str, Any]],
+    plume_params: Dict[str, Any],
+    workers: int,
+    return_meta: Literal[False] = ...,
+) -> List[Optional[Dict[str, np.ndarray]]]:
+    ...
+
+
+@overload
+def run_parallel_plume_strikes(
+    jfh_steps: Sequence[Dict[str, Any]],
+    face_centroids: np.ndarray,
+    target_unit_normals: np.ndarray,
+    thruster_data: Dict[str, Any],
+    thruster_metrics: Optional[Dict[str, Any]],
+    plume_params: Dict[str, Any],
+    workers: int,
+    return_meta: Literal[True],
+) -> Tuple[
+    List[Optional[Dict[str, np.ndarray]]], List[Optional[Dict[str, Any]]]
+]:
+    ...
+
+
 def run_parallel_plume_strikes(
     jfh_steps: Sequence[Dict[str, Any]],
     face_centroids: np.ndarray,
@@ -445,6 +485,9 @@ def run_parallel_plume_strikes(
     plume_params: Dict[str, Any],
     workers: int,
     return_meta: bool = False,
+) -> (
+    List[Optional[Dict[str, np.ndarray]]]
+    | Tuple[List[Optional[Dict[str, np.ndarray]]], List[Optional[Dict[str, Any]]]]
 ):
     """Compute per-firing strike results across processes, one firing per task.
 

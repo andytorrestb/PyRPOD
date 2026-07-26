@@ -1,37 +1,43 @@
 #spherically symmetric isentropic expanison into a vacuum
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 from math import sqrt
 
 class IsentropicExpansion:
 
-    def calculate_temp(self, M, gamma, T_star):
+    def calculate_temp(self, M: float, gamma: float, T_star: float) -> float:
         T = (gamma + 1) * T_star / (2 + (gamma - 1) * M**2)
         return T
     
-    def calculate_temp_ratio(self, M, gamma):
+    def calculate_temp_ratio(self, M: float, gamma: float) -> float:
         T_ratio = (gamma + 1) / (2 + (gamma - 1) * M**2)
         return T_ratio
 
-    def calculate_radius(self, M, gamma, r_star):
+    def calculate_radius(self, M: float, gamma: float,
+                         r_star: float) -> float:
         x = ((2 + (gamma - 1) * M**2) / (gamma + 1))**((gamma + 1) / (gamma - 1))
         r = r_star * sqrt((1/M) * sqrt(x))
         return r
     
-    def calculate_radius_ratio(self, M, gamma):
+    def calculate_radius_ratio(self, M: float, gamma: float) -> float:
         x = ((2 + (gamma - 1) * M**2) / (gamma + 1))**((gamma + 1) / (gamma - 1))
         r_ratio = sqrt((1/M) * sqrt(x))
         return r_ratio
     
-    def calculate_number_density(self, M, gamma, n_star):
+    def calculate_number_density(self, M: float, gamma: float,
+                                 n_star: float) -> float:
         n = n_star * ((gamma + 1) / (2 + (gamma - 1)* M**2)) ** (1 / (gamma - 1))
         return n
     
-    def calculate_number_density_ratio(self, M, gamma):
+    def calculate_number_density_ratio(self, M: float,
+                                       gamma: float) -> float:
         n_ratio = ((gamma + 1) / (2 + (gamma - 1)* M**2)) ** (1 / (gamma - 1))
         return n_ratio
 
-    def plot_temp_vs_radius(self, M1, M2, gamma, T_star, r_star):
+    def plot_temp_vs_radius(self, M1: float, M2: float, gamma: float,
+                            T_star: float, r_star: float) -> None:
         temps = []
         radii = []
        
@@ -53,7 +59,8 @@ class IsentropicExpansion:
         plt.grid(True)
         plt.show()
 
-    def plot_temp_ratios_vs_radius(self, M1, M2, gamma, r_star):
+    def plot_temp_ratios_vs_radius(self, M1: float, M2: float, gamma: float,
+                                   r_star: float) -> None:
         
         temp_ratios = []
         radius_ratios = []
@@ -68,7 +75,13 @@ class IsentropicExpansion:
 
             M += 0.5
 
-        plt.plot(radius_ratios * r_star, temp_ratios, marker='o')
+        # radius_ratios is a Python list, so `list * float` raises TypeError:
+        # this method (and its sibling below) cannot run as written. Both are
+        # only referenced from commented-out lines in
+        # tests/plume/plume_verification_test_01.py. Flagged, not fixed --
+        # scaling the ratios is a numerical change, out of scope for #103.
+        plt.plot(radius_ratios * r_star,  # type: ignore[operator]
+                 temp_ratios, marker='o')
         plt.yscale('log')
         plt.title("Temperature vs Radius")
         plt.xlabel("Radial distance, r (m)")
@@ -76,7 +89,9 @@ class IsentropicExpansion:
         plt.grid(True)
         plt.show()
 
-    def plot_number_density_ratios_vs_radius(self, M1, M2, gamma, r_star):
+    def plot_number_density_ratios_vs_radius(self, M1: float, M2: float,
+                                             gamma: float,
+                                             r_star: float) -> None:
         
         n_ratios = []
         radius_ratios = []
@@ -91,7 +106,8 @@ class IsentropicExpansion:
 
             M += 0.5
 
-        plt.plot(radius_ratios * r_star, n_ratios, marker='o')
+        # Same pre-existing `list * float` TypeError as above.
+        plt.plot(radius_ratios * r_star, n_ratios, marker='o')  # type: ignore[operator]
         plt.yscale('log')
         plt.title("Number Density vs Radius")
         plt.xlabel("Radial distance, r (m)")
