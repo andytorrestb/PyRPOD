@@ -11,7 +11,13 @@
 
 import unittest
 
+import pytest
+
 class PlumeTest(unittest.TestCase):
+    @pytest.mark.skip(
+        reason="Placeholder: the test body returns immediately and asserts "
+        "nothing (see tests/test_manifest.yaml)."
+    )
     def test_plume(self):
         # print("plume unit test")
         return

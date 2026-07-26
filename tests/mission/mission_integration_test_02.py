@@ -9,9 +9,15 @@
 # A brief test case to calculate the 6DOF performance of thruster working groups
 
 import unittest, os, sys
+import pytest
 from pyrpod.vehicle import LogisticsModule
 
 class ThrusterGroupingChecks(unittest.TestCase):
+    @pytest.mark.skip(
+        reason="Placeholder: only local constants are assigned; the analysis "
+        "itself is commented out, so the test asserts nothing "
+        "(see tests/test_manifest.yaml)."
+    )
     def test_performance_per_thruster_group(self):
 
         # Define LM mass distrubtion properties.
