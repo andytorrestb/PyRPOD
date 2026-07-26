@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pandas as pd
 import numpy as np
@@ -10,12 +10,6 @@ from numpy.typing import NDArray
 from pyrpod.mission.SubModule import SubModule
 from pyrpod.mission.six_dof_dynamics import SixDOFDynamics
 from pyrpod.util.io.fs import resolve_asset_path
-
-# This one MUST stay type-only. MissionPlanner imports FlightEvaluator at
-# module level, so a real import here closes the cycle and raises ImportError
-# on a partially initialized module in either direction.
-if TYPE_CHECKING:
-    from pyrpod.mission.MissionPlanner import MissionPlanner
 
 class FlightEvaluator(SubModule, SixDOFDynamics):
         # self.maneuvers = []
@@ -27,7 +21,11 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
         # Parse CSV or other source
         pass
 
-    def execute(self, mission_planner: MissionPlanner) -> None:
+    # mission_planner is the owning MissionPlanner. It is typed Any rather than
+    # MissionPlanner because MissionPlanner imports FlightEvaluator at module
+    # level, so naming the class here -- with or without an import -- is a
+    # circular import. The method is a stub, so nothing is lost today.
+    def execute(self, mission_planner: Any) -> None:
         # Loop over maneuvers and update planner
         pass
 

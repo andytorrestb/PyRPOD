@@ -15,7 +15,6 @@ from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
 from pyrpod.vehicle.Vehicle import Vehicle
-from pyrpod.mdao import SweepConfig
 from pyrpod.logging_utils import log_asset, log_array_summary
 from pyrpod.util.io.fs import resolve_asset_path
 

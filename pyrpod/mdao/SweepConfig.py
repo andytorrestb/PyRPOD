@@ -14,19 +14,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
 
 import numpy as np
 import copy
 
-# These two MUST stay type-only. VisitingVehicle imports this module at module
-# level (`from pyrpod.mdao import SweepConfig`), so a real import here closes
-# the cycle: importing pyrpod.vehicle.VisitingVehicle first then fails with
-# "cannot import name 'VisitingVehicle' from partially initialized module".
-# LogisticsModule subclasses VisitingVehicle, so it closes the same loop.
-if TYPE_CHECKING:
-    from pyrpod.vehicle.LogisticsModule import LogisticsModule
-    from pyrpod.vehicle.VisitingVehicle import ThrusterConfig
+from pyrpod.vehicle.LogisticsModule import LogisticsModule
+from pyrpod.vehicle.VisitingVehicle import ThrusterConfig
 
 class SweepCoordinates:
 
