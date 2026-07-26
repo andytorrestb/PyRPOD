@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import math
 import os
+import re
 import logging
 
 from pyrpod.vehicle.Vehicle import Vehicle
@@ -166,8 +167,14 @@ class VisitingVehicle(Vehicle):
         initiate_plume_mesh()
             Helper method that reads in surface mesh for plume clone.
 
-        transform_plume_mesh(thruster_id, plumeMesh)
-            Transform plume mesh according to the specified thruster's DCM and exit coordinate.
+        transform_plume_mesh(thruster_id, plumeMesh, vv_orientation=None, vv_position=None)
+            Canonical plume placement. Local mode (no pose) applies the thruster
+            DCM and exit; complete mode (JFH pose supplied) additionally applies
+            the vehicle orientation, vehicle position, and cluster exit offset.
+
+        get_thruster_id_map() / get_thruster_id(jfh_index)
+            Cached JFH-index -> canonical-thruster-id mapping (insertion order);
+            invalidated when set_thruster_config() replaces the configuration.
 
         initiate_plume_normal(thruster_id)
             Collects plume normal vectors data for visualization.
@@ -324,6 +331,10 @@ class VisitingVehicle(Vehicle):
                          "(%d thrusters).", len(thruster_data))
             self.thruster_data = thruster_data
 
+        # The thruster configuration was (re)loaded or replaced; drop any cached
+        # JFH-index -> thruster-id mapping so it is rebuilt on next use.
+        self._thruster_id_map = None
+
         self.use_clusters = False
 
         n_types = len({self.thruster_data[t]['type'][0]
@@ -470,28 +481,188 @@ class VisitingVehicle(Vehicle):
         plumeMesh.points = 0.035 * plumeMesh.points
         return plumeMesh
 
-    def transform_plume_mesh(self, thruster_id, plumeMesh):
+    # Leading "P<n>" cluster prefix of a thruster id (e.g. "P1T2" -> "P1",
+    # "P10T1" -> "P10"). Reproduces the legacy first-two-character parse for
+    # single-digit clusters while additionally supporting multi-digit ones.
+    _CLUSTER_ID_RE = re.compile(r'^(P\d+)')
+
+    def _cluster_id_for_thruster(self, thruster_id):
+        """Resolve the cluster a thruster belongs to from its id.
+
+        The cluster association is encoded in the thruster naming convention:
+        a thruster id such as ``P1T2`` (or ``P10T1``) belongs to cluster
+        ``P1`` (``P10``). Legacy code extracted only the first two characters
+        (``thruster_id[0] + thruster_id[1]``), which is correct only for
+        single-digit cluster numbers; this parses the full ``P<n>`` prefix so
+        multi-digit clusters resolve correctly while single-digit ids behave
+        identically.
+
+        Raises
+        ------
+        KeyError
+            If the id does not encode a ``P<n>`` prefix, or the resolved
+            cluster is absent from the loaded cluster configuration. Clusters
+            are never silently omitted.
         """
-            Transform provided plume mesh according to specified thruster's DCM and exit coordinate.
+        match = self._CLUSTER_ID_RE.match(str(thruster_id))
+        if match is None:
+            raise KeyError(
+                f"Thruster id {thruster_id!r} does not encode a 'P<n>' cluster "
+                f"prefix; cannot resolve its cluster offset.")
+        cluster_id = match.group(1)
+        if cluster_id not in self.cluster_data:
+            raise KeyError(
+                f"Cluster {cluster_id!r} required by thruster {thruster_id!r} "
+                f"is not present in the loaded cluster configuration "
+                f"(available: {sorted(self.cluster_data)}).")
+        return cluster_id
 
-            Parameters
-            ----------
-            thruster_id : str
-                String to access thruster via a unique ID.
+    def transform_plume_mesh(self, thruster_id, plumeMesh,
+                             vv_orientation=None, vv_position=None):
+        """Place a plume mesh for a thruster, mutating it in place.
 
-            plumeMesh : mesh.Mesh
-                Surface mesh constructed from STL file in initial orientation.
+        Canonical owner of plume-placement geometry. Applies the legacy
+        transform sequence used by the RPOD visualization workflows, in this
+        exact order (rotations first, about the origin, before any translation
+        away from the rotation axes):
 
-            Returns
-            -------
-            plumeMesh : mesh.Mesh
-                Surface mesh constructed from STL file in transformed orientation.
+        1. Thruster DCM (transposed) — thruster frame -> visiting-vehicle frame.
+        2. Visiting-vehicle DCM (transposed) — VV frame -> target/JFH frame.
+           Applied only when ``vv_orientation`` is supplied.
+        3. Visiting-vehicle position in the target/JFH frame. Applied only when
+           ``vv_position`` is supplied.
+        4. Cluster exit offset, when clusters are enabled and a vehicle pose is
+           supplied (see :meth:`_cluster_id_for_thruster`).
+        5. Thruster exit offset — always applied.
 
+        Frame conventions (documentation only; do not "correct" the order):
+        the stored thruster DCM maps the thruster frame to the VV frame, and
+        the JFH/vehicle DCM maps the VV frame to the target frame. DCMs are
+        passed exactly as stored; transposition is applied internally.
+
+        Two placement modes:
+
+        - Local thruster placement (``vv_orientation``/``vv_position`` both
+          omitted): applies only steps 1 and 5 — the historical behavior of
+          this method, used by ``check_thruster_configuration`` and
+          ``LogisticsModule.plot_thruster_group``. No cluster offset is applied
+          in this mode.
+        - Complete vehicle/JFH placement (pose supplied): applies steps 1-5,
+          the sequence used by ``graph_jfh``/``visualize_sweep``.
+
+        Parameters
+        ----------
+        thruster_id : str
+            Canonical thruster id (a key of ``self.thruster_data``). An unknown
+            id raises ``KeyError`` via the ``thruster_data`` lookup.
+        plumeMesh : stl.mesh.Mesh
+            Plume mesh in its initial orientation. Mutated in place (numpy-stl
+            transforms mutate); the same object is returned for convenience.
+        vv_orientation : array-like, optional
+            3x3 visiting-vehicle DCM as stored in the JFH (untransposed). When
+            supplied, enables steps 2 and 4.
+        vv_position : array-like, optional
+            Length-3 visiting-vehicle position in the target/JFH frame. When
+            supplied, enables step 3.
+
+        Returns
+        -------
+        stl.mesh.Mesh
+            The same ``plumeMesh`` object, transformed in place.
+
+        Raises
+        ------
+        KeyError
+            Unknown ``thruster_id``; or, when clusters are enabled, a missing
+            required cluster.
         """
-        rot = np.array(self.thruster_data[thruster_id]['dcm'])
-        plumeMesh.rotate_using_matrix(rot.T)
+        full_placement = vv_orientation is not None
+
+        # Step 1: thruster DCM (transposed). Always applied. The stored DCM is
+        # expected to be 3x3; validating here fails fast on malformed
+        # configuration data rather than producing silently wrong geometry.
+        thruster_dcm = np.asarray(self.thruster_data[thruster_id]['dcm'])
+        if thruster_dcm.shape != (3, 3):
+            raise ValueError(
+                f"Thruster {thruster_id!r} DCM must be 3x3, got shape "
+                f"{thruster_dcm.shape}.")
+        plumeMesh.rotate_using_matrix(thruster_dcm.T)
+
+        # Step 2: visiting-vehicle DCM (transposed), when a pose is supplied.
+        if vv_orientation is not None:
+            vv_dcm = np.asarray(vv_orientation)
+            if vv_dcm.shape != (3, 3):
+                raise ValueError(
+                    f"vv_orientation must be a 3x3 DCM, got shape "
+                    f"{vv_dcm.shape}.")
+            plumeMesh.rotate_using_matrix(vv_dcm.T)
+
+        # Step 3: visiting-vehicle position in the target/JFH frame.
+        if vv_position is not None:
+            vv_pos = np.asarray(vv_position)
+            if vv_pos.shape != (3,):
+                raise ValueError(
+                    f"vv_position must be a length-3 vector, got shape "
+                    f"{vv_pos.shape}.")
+            plumeMesh.translate(vv_position)
+
+        # Step 4: cluster exit offset (legacy semantics), only for complete
+        # vehicle/JFH placement with clusters enabled.
+        if full_placement and getattr(self, 'use_clusters', False):
+            cluster_id = self._cluster_id_for_thruster(thruster_id)
+            plumeMesh.translate(self.cluster_data[cluster_id]['exit'][0])
+
+        # Step 5: thruster exit offset. Always applied.
         plumeMesh.translate(self.thruster_data[thruster_id]['exit'][0])
         return plumeMesh
+
+    def get_thruster_id_map(self):
+        """Return the cached JFH-index -> canonical-thruster-id mapping.
+
+        The JFH references thrusters by 1-based numeric index into the thruster
+        configuration order; this maps ``'1' -> first thruster id``, and so on,
+        preserving the insertion order of ``self.thruster_data`` (the legacy
+        ordering rule). Values are canonical thruster ids (the string in the
+        one-element ``['name']`` field), so callers no longer index a
+        one-element list per lookup.
+
+        The mapping is built lazily on first use and cached; it is invalidated
+        by :meth:`set_thruster_config` whenever the configuration is replaced.
+        """
+        cached = getattr(self, '_thruster_id_map', None)
+        if cached is None:
+            cached = {}
+            for index, thruster in enumerate(self.thruster_data, start=1):
+                cached[str(index)] = self.thruster_data[thruster]['name'][0]
+            self._thruster_id_map = cached
+        return cached
+
+    def get_thruster_id(self, jfh_index):
+        """Return the canonical thruster id for a 1-based JFH thruster index.
+
+        Parameters
+        ----------
+        jfh_index : int or str
+            Thruster index as referenced by the JFH (1-based).
+
+        Returns
+        -------
+        str
+            Canonical thruster id (a key of ``self.thruster_data``).
+
+        Raises
+        ------
+        KeyError
+            If the index is outside the configured thruster range.
+        """
+        mapping = self.get_thruster_id_map()
+        key = str(jfh_index)
+        try:
+            return mapping[key]
+        except KeyError:
+            raise KeyError(
+                f"JFH references thruster index {jfh_index} outside the "
+                f"configured range 1..{len(mapping)}.") from None
 
     def initiate_plume_normal(self, thruster_id):
         """
