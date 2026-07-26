@@ -1,3 +1,15 @@
+# Optional dependencies for generating the test dashboard (PEP 735). PyRPOD is
+# not installed as a distribution, so there is no [project] table to hang
+# optional-dependencies off; a dependency group adds these without introducing
+# packaging metadata or changing how the repository is installed.
+#   python -m pip install --group test        (pip >= 25.1)
+[dependency-groups]
+test = [
+    "pytest",
+    "pytest-html>=4.2,<5",
+    "PyYAML>=6",
+]
+
 [tool.black]
 line-length = 88
 target-version = ["py311"]
@@ -39,4 +51,5 @@ markers = [
     "mission: mission subsystem tests",
     "plume: plume subsystem tests",
     "rpod: rpod subsystem tests",
+    "tooling: test-infrastructure tests",
 ]

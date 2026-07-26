@@ -7,6 +7,10 @@ data/stl/tcd/
 
 results/
 
+# Run-specific test reports (HTML report + failed-test logs). The generated
+# tests/README.md and tests/test_manifest.yaml ARE tracked.
+reports/
+
 results.txt
 *.pyc
 *.png
