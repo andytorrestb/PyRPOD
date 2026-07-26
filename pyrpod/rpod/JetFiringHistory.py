@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import configparser
 import logging
 import time
+from collections.abc import Sequence
+from typing import Any
+
 import numpy as np
 import sympy as sp
 
@@ -11,7 +16,7 @@ from pyrpod.util.io.fs import resolve_asset_path
 
 logger = logging.getLogger(__name__)
 
-def make_norm(vector_value_function):
+def make_norm(vector_value_function: Sequence[Any]) -> Any:
     """Calculate vector norm/magnitude using the Pythagoream Theorem."""
     return sp.sqrt(sp.Pow(vector_value_function[0],2) + sp.Pow(vector_value_function[1],2))
 
@@ -47,7 +52,20 @@ class JetFiringHistory:
             STL file rotations. Data is then saved to a text file.
     """
 
-    def __init__(self, case_dir):
+    # Declared bare (no class attribute is created) and annotated to the
+    # class contract: a parsed firing list. read_jfh writes None as a
+    # "nothing loaded" sentinel on two failure paths, but only
+    # FuelManager.calc_total_delta_mass ever checks for it -- every other
+    # consumer, including PlumeStrikeEstimationStudy throughout, indexes
+    # JFH unguarded. Widening to list|None would relocate one report onto
+    # roughly forty unguarded call sites without fixing any of them.
+    # Element type is dict[str, Any] rather than a TypedDict because the
+    # records exist in two shapes: read_jfh parses the time fields as
+    # strings with nested-list dcm/xyz, while tests and edit_1d_JFH
+    # synthesize steps with NumPy arrays under the same keys.
+    JFH: list[dict[str, Any]]
+
+    def __init__(self, case_dir: str) -> None:
         """
             Constructor simply sets case directory and parses the
             appopriate configuration file.
@@ -68,7 +86,7 @@ class JetFiringHistory:
         config.read(self.case_dir + "config.ini")
         self.config = config
 
-    def read_jfh(self):
+    def read_jfh(self) -> None:
         """
             Method responsible for reading and parsing through JFH data.
 
@@ -92,7 +110,7 @@ class JetFiringHistory:
         except KeyError:
             logger.debug("No [jfh] jfh configured for case %s; JFH not loaded.",
                          self.case_dir)
-            self.JFH = None
+            self.JFH = None  # type: ignore[assignment]  # sentinel
             return
         logger.debug("Resolving JFH asset %r for case %s", jfh_name, self.case_dir)
         path_to_jfh = resolve_asset_path(self.case_dir, 'jfh', jfh_name)
@@ -106,7 +124,7 @@ class JetFiringHistory:
             except IndexError:
                 logger.error("Supplied JFH file is empty (no header/firing "
                              "count): %s", path_to_jfh)
-                self.JFH = None
+                self.JFH = None  # type: ignore[assignment]  # sentinel
                 return
 
             # Throw away second line
@@ -130,7 +148,7 @@ class JetFiringHistory:
                 curr_row[-1] = curr_row[-1].split('\n')[0]
                 # print(curr_row)
                 # Save all information in current row to a dictionary.
-                time_step = {}
+                time_step: dict[str, Any] = {}
                 
                 # Save time data. 
                 time_step['nt'] = curr_row.pop(0)
@@ -193,7 +211,7 @@ class JetFiringHistory:
         return
 
 
-    def graph_param_curve(self, t, r_of_t):
+    def graph_param_curve(self, t: Any, r_of_t: Sequence[Any]) -> None:
         ''' Used to quickly prototype and visualize a proposed approach path.
             Calculates the unit tangent vector at a given timestep and
             rotates the STL file accordingly. Data is plotted using matlab
@@ -306,7 +324,9 @@ class JetFiringHistory:
 
             plt.close()
 
-    def print_JFH_param_curve(self, jfh_path, t, r_of_t, align = False):
+    def print_JFH_param_curve(self, jfh_path: str, t: Any,
+                              r_of_t: Sequence[Any],
+                              align: bool = False) -> None:
         ''' Used to produce JFH data for a proposed approach path.
             Calculates the unit tangent vector at a given timestep and DCMs for
             STL file rotations. Data is then saved to a text file.

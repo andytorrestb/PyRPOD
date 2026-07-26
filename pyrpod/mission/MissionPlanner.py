@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 
 class MissionPlanner:
 
+    # Set as a CLASS attribute by PlumeStrikeEstimationStudy.calc_jfh_1d_approach
+    # (MissionPlanner.cant = np.radians(cant)) and read back from there.
+    # Declared bare so no attribute is created at import time.
+    cant: float
+
     def __init__(self, environment: MissionEnvironment) -> None:
         self.environment = environment
 

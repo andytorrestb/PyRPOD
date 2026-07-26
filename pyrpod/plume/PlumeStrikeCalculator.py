@@ -456,7 +456,7 @@ def run_parallel_plume_strikes(
     plume_params: Dict[str, Any],
     workers: int,
     return_meta: Literal[False] = ...,
-) -> List[Optional[Dict[str, np.ndarray]]]:
+) -> List[Dict[str, np.ndarray]]:
     ...
 
 
@@ -470,9 +470,7 @@ def run_parallel_plume_strikes(
     plume_params: Dict[str, Any],
     workers: int,
     return_meta: Literal[True],
-) -> Tuple[
-    List[Optional[Dict[str, np.ndarray]]], List[Optional[Dict[str, Any]]]
-]:
+) -> Tuple[List[Dict[str, np.ndarray]], List[Dict[str, Any]]]:
     ...
 
 
@@ -486,8 +484,8 @@ def run_parallel_plume_strikes(
     workers: int,
     return_meta: bool = False,
 ) -> (
-    List[Optional[Dict[str, np.ndarray]]]
-    | Tuple[List[Optional[Dict[str, np.ndarray]]], List[Optional[Dict[str, Any]]]]
+    List[Dict[str, np.ndarray]]
+    | Tuple[List[Dict[str, np.ndarray]], List[Dict[str, Any]]]
 ):
     """Compute per-firing strike results across processes, one firing per task.
 
@@ -527,9 +525,12 @@ def run_parallel_plume_strikes(
             firing_index, result, meta = future.result()
             results[firing_index] = result
             metas[firing_index] = meta
+    # results/metas are pre-allocated with None so they can be filled in
+    # firing order, but every slot is assigned from a future above before
+    # returning, so no None survives into the public return type.
     if return_meta:
-        return results, metas
-    return results
+        return results, metas  # type: ignore[return-value]
+    return results  # type: ignore[return-value]
 
 
 def accumulate_cumulative(
