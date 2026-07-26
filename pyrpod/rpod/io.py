@@ -11,7 +11,10 @@ Keep logic thin and parameterized; do not compute physics here.
 from __future__ import annotations
 
 import os
-from typing import Any, Sequence
+from typing import Any, Sequence, Union
+
+import numpy as np
+from numpy.typing import NDArray
 
 from pyrpod.util.io.file_print import print_JFH, print_1d_JFH
 from pyrpod.util.io.fs import ensure_dir
@@ -28,7 +31,14 @@ def save_mesh_to_stl(mesh_obj: Any, path: str) -> None:
     mesh_obj.save(path)
 
 
-def write_jfh(t_values, r, rot, path: str, mode: str = "1d") -> None:
+# Same bound as pyrpod.util.io.file_print: callers pass either Python lists
+# of per-axis rows or NumPy arrays of the same shape.
+_Times = Union[Sequence[float], NDArray[np.float64]]
+_Rows = Union[Sequence[Any], NDArray[Any]]
+
+
+def write_jfh(t_values: _Times, r: _Rows, rot: _Rows, path: str,
+              mode: str = "1d") -> None:
     """Write a JFH file.
 
     mode="1d" uses print_1d_JFH formatting; mode="generic" uses print_JFH.

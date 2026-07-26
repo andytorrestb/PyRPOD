@@ -176,6 +176,17 @@ def get_N_factor(Q: FloatOrArray, S_0: float) -> FloatOrArray:
     return term1 + term2 * term3 * erf_term
 
 
+@overload
+def get_Q_full(r: float, epsilon: float, X: float, Z: float) -> float:
+    ...
+
+
+@overload
+def get_Q_full(r: FloatOrArray, epsilon: FloatOrArray, X: FloatOrArray,
+               Z: FloatOrArray) -> FloatOrArray:
+    ...
+
+
 def get_Q_full(r: FloatOrArray, epsilon: FloatOrArray, X: FloatOrArray,
                Z: FloatOrArray) -> FloatOrArray:
     '''
@@ -572,7 +583,7 @@ class Simons:
         theta_max = self.get_limiting_turn_angle()
         kappa = self.kappa
 
-        def integrand(theta):
+        def integrand(theta: float) -> float:
             return np.sin(theta) * np.cos((np.pi / 2) * (theta / theta_max)) ** kappa
 
         integral, _ = integrate.quad(integrand, 0, theta_max)
@@ -1105,7 +1116,7 @@ class SimplifiedGasKinetics:
         n_ratio = self.get_num_density_centerline()
         U1 = self.get_velocity_centerline()
 
-        def integrand(r):
+        def integrand(r: float) -> float:
             Q = get_Q_full(r, 0.0, self.X, 0.0)
             return get_N_factor(Q, self.S_0) * r
 
