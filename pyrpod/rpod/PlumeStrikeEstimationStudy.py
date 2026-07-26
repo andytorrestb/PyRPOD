@@ -1,4 +1,10 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Sequence
+from typing import Any
+
 import numpy as np
+from numpy.typing import NDArray
 import os
 import math
 import logging
@@ -41,10 +47,19 @@ from pyrpod.plume.PlumeStrikeCalculator import (
     run_parallel_plume_strikes,
 )
 
+# Aliased because study_init's parameter names shadow the class names.
+from pyrpod.rpod.JetFiringHistory import (
+    JetFiringHistory as JetFiringHistoryType,
+)
+from pyrpod.vehicle.TargetVehicle import (
+    TargetVehicle as TargetVehicleType,
+)
+
 logger = logging.getLogger(__name__)
 
 
-def _log_jfh_generation_complete(jfh_path, n_firings, gen_start):
+def _log_jfh_generation_complete(jfh_path: str, n_firings: int,
+                                 gen_start: float) -> None:
     """Log completion of a JFH-generation step (path, size, count, runtime).
 
     Never raises: JFH generation is a scientific write, so an observability
@@ -126,7 +141,24 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
     """
     # def __init__(self):
     #     print("Initialized Approach Visualizer")
-    def study_init(self, JetFiringHistory, Target, Vehicle):
+    # Collaborator state and thruster-group / fuel helpers that this
+    # class calls on self but neither it nor MissionPlanner defines.
+    # Declared bare, so no class attribute is created at runtime.
+    jfh: JetFiringHistoryType
+    target: TargetVehicleType
+    vv: LogisticsModule
+    viz: PlumeStudyExport
+    case_key: str
+    calc_m_dot_sum: Callable[[str], float]
+    calc_v_e: Callable[[str], float]
+    calc_delta_v: Callable[[float, float, float, float], float]
+    calc_delta_mass_v_e: Callable[[float, float, bool], float]
+    # Sweep index set externally by mdao.TradeStudy before visualize_sweep.
+    count: int
+
+    def study_init(self, JetFiringHistory: JetFiringHistoryType,
+                   Target: TargetVehicleType,
+                   Vehicle: LogisticsModule) -> None:
         """
             Designates assets for RPOD analysis.
 
@@ -152,7 +184,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         # visualization/export helper
         self.viz = PlumeStudyExport(self.environment)
 
-    def graph_init_config(self):
+    def graph_init_config(self) -> None:
         """
             Creates visualization data for initiial configuration of RPOD analysis.
 
@@ -196,7 +228,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         plt.show()
 
 
-    def graph_jfh_thruster_check(self):
+    def graph_jfh_thruster_check(self) -> None:
         """
             Creates visualization data for initiial configuration of RPOD analysis.
 
@@ -285,11 +317,16 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             elif firing < 100:
                 index = '0' + str(firing)
             else:
-                index = str(i)
+                # Pre-existing bug: `i` is not defined in this scope, so a
+                # 100th-or-later firing raises NameError. Flagged, not
+                # fixed (also reported by flake8 as F821).
+                index = str(i)  # type: ignore[name-defined]
             # delegate figure saving to export helper
             self.viz.save_figure(figure, os.path.join(self.environment.case_dir, 'img', 'frame' + str(index) + '.png'))
 
-    def graph_clusters(self, firing, vv_orientation):
+    def graph_clusters(
+        self, firing: int, vv_orientation: NDArray[np.float64]
+    ) -> mesh.Mesh | None:
         """
             Creates visualization data for the cluster.
             Parameters
@@ -343,7 +380,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             return None
         return compose_meshes(cluster_meshes)
 
-    def graph_jfh(self, trade_study = False): 
+    def graph_jfh(self, trade_study: bool = False) -> None:
         """
             Creates visualization data for the trajectory of the proposed RPOD analysis.
 
@@ -438,7 +475,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             if active_cones is not None:
                 components.append(active_cones)
                 if self.vv.use_clusters == True:
-                    components.append(active_clusters)
+                    # graph_clusters returns None only when no clusters are
+                    # configured, which use_clusters already excludes.
+                    components.append(active_clusters)  # type: ignore[arg-type]
             VVmesh = compose_meshes(components)
 
             if trade_study == False:
@@ -466,7 +505,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
                     "failures=%d directory=%s", viz_files_written,
                     viz_failures, jfh_export_dir)
 
-    def visualize_sweep(self, config_iter):
+    def visualize_sweep(self, config_iter: int) -> None:
         """
             Creates visualization data for the trajectory of the proposed RPOD analysis.
 
@@ -554,7 +593,8 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             if active_cones is not None:
                 components.append(active_cones)
                 if self.vv.use_clusters == True:
-                    components.append(active_clusters)
+                    # See graph_jfh: None only without configured clusters.
+                    components.append(active_clusters)  # type: ignore[arg-type]
             VVmesh = compose_meshes(components)
 
             if self.count > 0:
@@ -630,7 +670,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
     #     return param_queue, param_window_sum
 
     # Helper functions for jfh_plume_strikes
-    def create_results_dir(self):
+    def create_results_dir(self) -> None:
         """
             Creates a results directory and sub-directories if they don't already exist.
         """
@@ -638,7 +678,13 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         for sub_dir in sub_dirs:
             ensure_dir(os.path.join(self.environment.case_dir, sub_dir))
 
-    def set_strike_fields(self, target):
+    def set_strike_fields(
+        self, target: mesh.Mesh
+    ) -> (
+        tuple[NDArray[np.float64], NDArray[np.float64],
+              NDArray[np.float64], NDArray[np.float64]]
+        | NDArray[np.float64]
+    ):
         # Initiate array containing cummulative strikes. 
         cum_strikes = np.zeros(len(target.vectors))
 
@@ -658,7 +704,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         return cum_strikes
 
-    def extract_firing_data(self, firing):
+    def extract_firing_data(
+        self, firing: int
+    ) -> tuple[list[int], Sequence[float], NDArray[np.float64]]:
         # Save active thrusters for current firing.
         thrusters = self.jfh.JFH[firing]['thrusters']
         # print("thrusters", thrusters)
@@ -670,7 +718,14 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         return thrusters, vv_pos, vv_orientation
 
-    def set_plume_strike_fields(self, target):
+    def set_plume_strike_fields(
+        self, target: mesh.Mesh
+    ) -> (
+        tuple[NDArray[np.float64], NDArray[np.float64],
+              NDArray[np.float64], NDArray[np.float64],
+              NDArray[np.float64]]
+        | NDArray[np.float64]
+    ):
             # reset strikes for each firing
             strikes = np.zeros(len(target.vectors))
 
@@ -688,7 +743,11 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             else:
                 return strikes
     
-    def set_plume_transformations(self, thruster_id, vv_orientation, vv_pos):
+    def set_plume_transformations(
+        self, thruster_id: str, vv_orientation: NDArray[np.float64],
+        vv_pos: Sequence[float] | NDArray[np.float64],
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64],
+               NDArray[np.float64]]:
         # Load data to calculate plume transformations
 
         # First, according to DCM and exit vector using current thruster id in TCD
@@ -711,7 +770,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         return plume_normal, thruster_pos, thruster_orientation
 
-    def set_face_centroid(self, face):
+    def set_face_centroid(
+        self, face: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         # Calculate centroid for face
 
         x = np.array(face[0]).mean()
@@ -722,7 +783,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         return centroid
 
-    def set_face_distance(self, thruster_pos, centroid):
+    def set_face_distance(
+        self, thruster_pos: NDArray[np.float64],
+        centroid: NDArray[np.float64],
+    ) -> tuple[NDArray[np.float64], Any, NDArray[np.float64]]:
         # Calculate distance vector between face centroid and thruster exit.
         distance = thruster_pos - centroid
         # print('distance vector', distance)
@@ -733,7 +797,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         return distance, norm_distance, unit_distance
 
-    def _resolve_parallel_options(self, parallel, workers, n_firings):
+    def _resolve_parallel_options(
+        self, parallel: bool | None, workers: int | None, n_firings: int
+    ) -> tuple[bool, int]:
         """
             Resolves parallel execution settings for jfh_plume_strikes().
 
@@ -785,7 +851,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             return False, 1
         return True, workers
 
-    def _validate_plume_strike_inputs(self):
+    def _validate_plume_strike_inputs(self) -> bool:
         """Fail-fast validation of the inputs a plume-strike run requires.
 
         Logs an ERROR naming the case, the offending section/key, and any
@@ -802,7 +868,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         config = self.environment.config
         case_dir = self.environment.case_dir
 
-        def require_option(section, key):
+        def require_option(section: str, key: str) -> str:
             if not config.has_option(section, key):
                 logger.error("Missing required config [%s] %s (case %s)",
                              section, key, case_dir)
@@ -873,7 +939,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
                     f"{case_dir}); call set_thruster_metrics().")
         return kinetics_on
 
-    def jfh_plume_strikes(self, parallel=None, workers=None):
+    def jfh_plume_strikes(
+        self, parallel: bool | None = None, workers: int | None = None
+    ) -> dict[str, dict[str, NDArray[np.float64]]]:
         """
             Calculates number of plume strikes according to data provided for RPOD analysis.
             Method assumes that study assets are correctly configured.
@@ -930,7 +998,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         else:
             cum_strikes = self.set_strike_fields(target)
 
-        firing_data = {}
+        firing_data: dict[str, dict[str, NDArray[np.float64]]] = {}
 
         n_firings = len(self.jfh.JFH)
 
@@ -1031,10 +1099,13 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             }
 
             if kinetics_on:
-                pressures = result.get("pressures")
-                shear_stresses = result.get("shear_stress")
-                heat_flux_rate = result.get("heat_flux_rate")
-                heat_flux_load = result.get("heat_flux_load")
+                # dict.get() reports these as Optional; the enclosing
+                # kinetics_on branch is what guarantees the keys exist, an
+                # invariant the result dict's type cannot carry.
+                pressures: Any = result.get("pressures")
+                shear_stresses: Any = result.get("shear_stress")
+                heat_flux_rate: Any = result.get("heat_flux_rate")
+                heat_flux_load: Any = result.get("heat_flux_load")
 
                 max_pressures = np.maximum(max_pressures, pressures)
                 max_shears = np.maximum(max_shears, shear_stresses)
@@ -1208,14 +1279,19 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         return firing_data
 
-    def calc_time_multiplier(self, v_ida, v_o, r_o):
+    def calc_time_multiplier(self, v_ida: float, v_o: float,
+                             r_o: float) -> float:
         # Determine thruster configuration characterstics.
         # The JFH only contains firings done by the neg_x group
         m_dot_sum = self.calc_m_dot_sum('neg_x')
         # print('m_dot_sum is', m_dot_sum)
-        MIB = self.vv.thruster_metrics[self.vv.thruster_data[self.vv.rcs_groups['neg_x'][0]]['type'][0]]['MIB']
+        # thruster_metrics is Optional (None when the case has no [tcd] tdf);
+        # this legacy path has never guarded it.
+        MIB = self.vv.thruster_metrics[  # type: ignore[index]
+            self.vv.thruster_data[self.vv.rcs_groups['neg_x'][0]]['type'][0]]['MIB']
         # print('MIB is', MIB)
-        F_thruster = self.vv.thruster_metrics[self.vv.thruster_data[self.vv.rcs_groups['neg_x'][0]]['type'][0]]['F']
+        F_thruster = self.vv.thruster_metrics[  # type: ignore[index]
+            self.vv.thruster_data[self.vv.rcs_groups['neg_x'][0]]['type'][0]]['F']
         F = F_thruster * np.cos(self.vv.decel_cant)
         n_thrusters = len(self.vv.rcs_groups['neg_x'])
         F = F * n_thrusters
@@ -1249,7 +1325,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         # Initializing empty tracking lists
         dx = [0]
         t = [0]
-        dv = [0]
+        dv: list[float] = [0]
 
         # Initializing inertial state
         dxdt = [v_o]
@@ -1332,17 +1408,19 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
 
         # print(one_d_results)
 
-    def print_jfh_1d_approach_n_fire(self, v_ida, v_o, r_o, n_firings, trade_study = False):
+    def print_jfh_1d_approach_n_fire(self, v_ida: float, v_o: float,
+                                     r_o: float, n_firings: int,
+                                     trade_study: bool = False) -> None:
         # Delegate to approach_maneuvers.compute_1d_approach and rpod.io.write_jfh
         tm = self.calc_time_multiplier(v_ida, v_o, r_o)
         inputs = ApproachInputs(v_ida=float(v_ida), v_o=float(v_o), r_o=float(r_o), group='neg_x')
         # Adapter for grouping methods if not explicitly available as a module
         class _GroupingAdapter:
-            def __init__(self, outer):
+            def __init__(self, outer: 'PlumeStrikeEstimationStudy') -> None:
                 self._outer = outer
-            def calc_m_dot_sum(self, group):
+            def calc_m_dot_sum(self, group: str) -> float:
                 return self._outer.calc_m_dot_sum(group)
-            def calc_v_e(self, group):
+            def calc_v_e(self, group: str) -> float:
                 return self._outer.calc_v_e(group)
 
         results = compute_1d_approach(
@@ -1373,7 +1451,8 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         _log_jfh_generation_complete(jfh_path, len(t_values), gen_start)
 
 
-    def print_jfh_1d_approach(self, v_ida, v_o, r_o, trade_study = False):
+    def print_jfh_1d_approach(self, v_ida: float, v_o: float, r_o: float,
+                              trade_study: bool = False) -> None:
         """
             Method creates JFH data for axial approach using simpified physics calculations.
 
@@ -1401,11 +1480,11 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         # Delegate to approach_maneuvers with a fixed multiplier similar to legacy
         inputs = ApproachInputs(v_ida=float(v_ida), v_o=float(v_o), r_o=float(r_o), group='neg_x')
         class _GroupingAdapter:
-            def __init__(self, outer):
+            def __init__(self, outer: 'PlumeStrikeEstimationStudy') -> None:
                 self._outer = outer
-            def calc_m_dot_sum(self, group):
+            def calc_m_dot_sum(self, group: str) -> float:
                 return self._outer.calc_m_dot_sum(group)
-            def calc_v_e(self, group):
+            def calc_v_e(self, group: str) -> float:
                 return self._outer.calc_v_e(group)
 
         results = compute_1d_approach(
@@ -1434,7 +1513,9 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         _log_jfh_generation_complete(jfh_path, len(t_values), gen_start)
         return
 
-    def edit_1d_JFH(self, t_values, r,  rot):
+    def edit_1d_JFH(self, t_values: NDArray[np.float64],
+                    r: Sequence[NDArray[np.float64]],
+                    rot: NDArray[np.float64]) -> None:
         """
             Helper function to RPOD.calc_jfh_1d_approach() that is responsible for
             modifying the JFH attribute in memory with the values calculated.
@@ -1503,7 +1584,8 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         # print('self.jfh.JFH is', self.jfh.JFH)
         # print('len(self.jfh.JFH) is', len(self.jfh.JFH))
 
-    def calc_jfh_1d_approach(self, v_ida, v_o, cant):
+    def calc_jfh_1d_approach(self, v_ida: float, v_o: float,
+                             cant: float) -> None:
         """
             The x-position represents the distance required to reach a velocity of zero.    
         
@@ -1535,11 +1617,11 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         inputs = ApproachInputs(v_ida=float(v_ida), v_o=float(v_o), r_o=0.0, group='neg_x')
 
         class _GroupingAdapter:
-            def __init__(self, outer):
+            def __init__(self, outer: 'PlumeStrikeEstimationStudy') -> None:
                 self._outer = outer
-            def calc_m_dot_sum(self, group):
+            def calc_m_dot_sum(self, group: str) -> float:
                 return self._outer.calc_m_dot_sum(group)
-            def calc_v_e(self, group):
+            def calc_v_e(self, group: str) -> float:
                 return self._outer.calc_v_e(group)
 
         results = compute_1d_approach(
@@ -1556,15 +1638,18 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         rot = results["rot"]
         self.edit_1d_JFH(t_values, r, rot)
 
-    def get_case_key(self):
+    def get_case_key(self) -> str:
         return self.case_key
 
-    def set_case_key(self, v0_iter, cant_iter):
+    def set_case_key(self, v0_iter: Any, cant_iter: Any) -> None:
 
         self.case_key = 'vo_' + str(v0_iter) + '_cant_' + str(cant_iter)
 
         return
 
-    def make_test_jfh():
+    # Declared without self and never called; invoking it on an instance
+    # would raise TypeError. Adding self would change the signature,
+    # which #103 excludes, so the defect is flagged here instead.
+    def make_test_jfh() -> None:  # type: ignore[misc]
 
         return

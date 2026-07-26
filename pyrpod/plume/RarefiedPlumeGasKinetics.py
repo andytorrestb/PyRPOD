@@ -34,18 +34,51 @@ Omega = integral domain
 ' = simplified analytical results
 """
 
+from __future__ import annotations
+
 import warnings
+from collections.abc import Mapping
+from typing import Any, TypeAlias, overload
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy import integrate
 from scipy.special import erf
+
+# The closed-form field expressions below are written entirely with NumPy
+# ufuncs, so each one accepts a scalar or an array of any shape and returns the
+# matching kind; their docstrings already document this as "float or ndarray",
+# and the quadrature in CollisionlessGasKinetics._compute_field_integrals (and
+# tests/plume/plume_figure_utils.py) evaluates them on meshgrids.
+FloatOrArray: TypeAlias = "float | NDArray[np.float64]"
+
+# Field-point coordinates arrive from NumPy geometry in the impingement
+# pipeline (np.linalg.norm for the distance, 3.14 - np.arccos(...) for theta),
+# which produces np.floating rather than a plain float.
+Scalar: TypeAlias = "float | np.floating[Any]"
+
+# The K/M/N special factors are overloaded on Q rather than just returning the
+# union: SimplifiedGasKinetics feeds them a scalar Q' and stores the result in
+# K_simple/M_simple/N_simple, which the Eq. 14-17 field ratios then divide as
+# scalars, so collapsing scalar-in to scalar-out is what keeps those return
+# types honest.
 
 #define constants
 AVOGADROS_NUMBER = 6.0221e23
 GAS_CONSTANT = 8.314
 
 
-def get_K_factor(Q, S_0):
+@overload
+def get_K_factor(Q: float, S_0: float) -> float:
+    ...
+
+
+@overload
+def get_K_factor(Q: NDArray[np.float64], S_0: float) -> NDArray[np.float64]:
+    ...
+
+
+def get_K_factor(Q: FloatOrArray, S_0: float) -> FloatOrArray:
     '''
         Scaled special factor exp(-S_0^2) * K [Cai & Wang 2012, Eq. 10].
 
@@ -74,7 +107,17 @@ def get_K_factor(Q, S_0):
     return Q * (term1 + term2 * erf_term)
 
 
-def get_M_factor(Q, S_0):
+@overload
+def get_M_factor(Q: float, S_0: float) -> float:
+    ...
+
+
+@overload
+def get_M_factor(Q: NDArray[np.float64], S_0: float) -> NDArray[np.float64]:
+    ...
+
+
+def get_M_factor(Q: FloatOrArray, S_0: float) -> FloatOrArray:
     '''
         Scaled special factor exp(-S_0^2) * M [Cai & Wang 2012, Eq. 11].
 
@@ -98,7 +141,17 @@ def get_M_factor(Q, S_0):
     return Q ** 2 * (term1 + term2 * erf_term)
 
 
-def get_N_factor(Q, S_0):
+@overload
+def get_N_factor(Q: float, S_0: float) -> float:
+    ...
+
+
+@overload
+def get_N_factor(Q: NDArray[np.float64], S_0: float) -> NDArray[np.float64]:
+    ...
+
+
+def get_N_factor(Q: FloatOrArray, S_0: float) -> FloatOrArray:
     '''
         Scaled special factor exp(-S_0^2) * N [Cai & Wang 2012, Eq. 12].
 
@@ -123,7 +176,19 @@ def get_N_factor(Q, S_0):
     return term1 + term2 * term3 * erf_term
 
 
-def get_Q_full(r, epsilon, X, Z):
+@overload
+def get_Q_full(r: float, epsilon: float, X: float, Z: float) -> float:
+    ...
+
+
+@overload
+def get_Q_full(r: FloatOrArray, epsilon: FloatOrArray, X: FloatOrArray,
+               Z: FloatOrArray) -> FloatOrArray:
+    ...
+
+
+def get_Q_full(r: FloatOrArray, epsilon: FloatOrArray, X: FloatOrArray,
+               Z: FloatOrArray) -> FloatOrArray:
     '''
         Full special factor Q [Cai & Wang 2012, Eq. 9] in closed form.
 
@@ -162,7 +227,7 @@ def get_Q_full(r, epsilon, X, Z):
     return X ** 2 / (X ** 2 + Z ** 2 - 2 * Z * r * np.sin(epsilon) + r ** 2)
 
 
-def get_far_field_velocity_normalized(S_0):
+def get_far_field_velocity_normalized(S_0: float) -> float:
     '''
         Far-field centerline velocity asymptote, lim U_1 * sqrt(beta_0)
         as X -> infinity [Cai & Wang 2012, Eqs. 22 and 24]. A function of
@@ -190,7 +255,7 @@ def get_far_field_velocity_normalized(S_0):
     return S_0 + (inv_E + sqpi * S_0) / (S_0 * inv_E + (0.5 + S_0 ** 2) * sqpi)
 
 
-def get_far_field_temp_ratio(S_0):
+def get_far_field_temp_ratio(S_0: float) -> float:
     '''
         Far-field centerline temperature asymptote, lim T_1/T_0 as
         X -> infinity [Cai & Wang 2012, Eqs. 23-24]. A function of the
@@ -221,7 +286,9 @@ def get_far_field_temp_ratio(S_0):
     return -(2 / 3) * G ** 2 + num / den
 
 
-def get_maxwellian_pressure(rho_inf, U, S, sigma, theta, T, T_w):
+def get_maxwellian_pressure(rho_inf: float, U: float, S: float,
+                            sigma: float, theta: Scalar, T: float,
+                            T_w: float) -> float:
     '''
         Rarefied Gas Dynamics - Shen - eq. 4.19
         Gas-surface interaction model for pressure based on Maxwell's model.
@@ -262,7 +329,8 @@ def get_maxwellian_pressure(rho_inf, U, S, sigma, theta, T, T_w):
     p *= (rho_inf * U ** 2) / (2 * S ** 2)
     return p
 
-def get_maxwellian_shear_pressure(rho_inf, U, S, sigma, theta):
+def get_maxwellian_shear_pressure(rho_inf: float, U: float, S: float,
+                                  sigma: float, theta: Scalar) -> float:
     '''
         Rarefied Gas Dynamics - Shen - eq. 4.20
         Gas-surface interaction model for shear pressure based on Maxwell's model.
@@ -294,7 +362,9 @@ def get_maxwellian_shear_pressure(rho_inf, U, S, sigma, theta):
     tau *= -(sigma * rho_inf * np.sin(theta) * U ** 2) / (2 * np.sqrt(np.pi) * S)
     return tau
 
-def get_maxwellian_heat_transfer(rho_inf, S, sigma, theta, T, T_r, R, gamma):
+def get_maxwellian_heat_transfer(rho_inf: float, S: float, sigma: float,
+                                 theta: Scalar, T: float, T_r: float,
+                                 R: float, gamma: float) -> float:
     '''
         Rarefied Gas Dynamics - Shen - eq. 4.45'
         Gas-surface interaction model for heat transfer based on Maxwell's model.
@@ -384,7 +454,8 @@ class Simons:
         Number density from continuity equation with constant mass flux across different spherical surfaces.
         Return the ratio of number density at an analyzed point outside of the exit vs at the exit.
     '''
-    def __init__(self, gamma, R, T_c, P_c, R_0, r, kappa=None):
+    def __init__(self, gamma: float, R: float, T_c: float, P_c: float,
+                 R_0: float, r: float, kappa: float | None = None) -> None:
         '''
             Simple constructor, saves parameters to self.
 
@@ -428,7 +499,7 @@ class Simons:
 
         self.set_normalization_constant()
 
-    def get_nozzle_throat_density(self):
+    def get_nozzle_throat_density(self) -> float:
         '''
             Returns density at the throat, from chamber pressure/temp, and specific gas constant.
             Assumes isentropic flow from chamber to throat.
@@ -450,7 +521,7 @@ class Simons:
         rho_throat = P_throat / (self.R * T_throat)
         return rho_throat
 
-    def get_limiting_turn_angle(self):
+    def get_limiting_turn_angle(self) -> float:
         '''
             From Lumpkin 1999. Solve for limiting turn angle from specific heat ratio.
 
@@ -465,7 +536,7 @@ class Simons:
         theta_max = (np.pi / 2) * (np.sqrt((self.gamma + 1) / (self.gamma - 1)) - 1)
         return theta_max
 
-    def get_plume_angular_density_decay_function(self, theta):
+    def get_plume_angular_density_decay_function(self, theta: float) -> float:
         '''
             Solve for the density decay function at a given off-centerline
             angle [Cai & Wang 2012, Eq. 26], f(theta) =
@@ -493,7 +564,7 @@ class Simons:
         f = (np.cos((np.pi / 2) * (theta / theta_max))) ** self.kappa
         return f
 
-    def set_normalization_constant(self):
+    def set_normalization_constant(self) -> None:
         '''
             From Lumpkin 1999. Setter for normalization constant.
             Numerically integrates sin(theta) * cos^kappa(pi*theta/(2*theta_max))
@@ -512,14 +583,14 @@ class Simons:
         theta_max = self.get_limiting_turn_angle()
         kappa = self.kappa
 
-        def integrand(theta):
+        def integrand(theta: float) -> float:
             return np.sin(theta) * np.cos((np.pi / 2) * (theta / theta_max)) ** kappa
 
         integral, _ = integrate.quad(integrand, 0, theta_max)
         self.A = 0.5 * np.sqrt((self.gamma - 1) / (self.gamma + 1)) / integral
         return
     
-    def get_sonic_velocity(self):
+    def get_sonic_velocity(self) -> float:
         '''
             Method that returns the sonic velocity of a flow given specific heat ratio,
             specific gas constant, and chamber temperature.
@@ -537,7 +608,7 @@ class Simons:
         sonic_velocity = np.sqrt(self.gamma * self.R * T_throat)
         return sonic_velocity
 
-    def get_limiting_velocity(self):
+    def get_limiting_velocity(self) -> float:
         '''
             Calculates the limiting velocity of the plume. This is based on the 
             specific heat ratio and the sonic velocity.
@@ -565,7 +636,7 @@ class Simons:
         return P_static
     '''
 
-    def get_num_density_ratio(self, theta):
+    def get_num_density_ratio(self, theta: float) -> float:
         '''
             Number density from continuity equation with constant mass flux
             across different spherical surfaces [Cai & Wang 2012, Eq. 25].
@@ -597,7 +668,8 @@ class Simons:
         n_ratio = rho_ratio
         return n_ratio
 
-    def get_num_density_ratio_exit(self, theta, exit_mach):
+    def get_num_density_ratio_exit(self, theta: float,
+                                   exit_mach: float) -> float:
         '''
             Exit-referenced number density ratio n/n_0.
 
@@ -726,7 +798,9 @@ class SimplifiedGasKinetics:
         get_heat_flux()
     '''
     #maybe group the special factors into one method and return an array of them?
-    def __init__(self, distance, theta, thruster_characteristics, T_w, sigma):
+    def __init__(self, distance: Scalar, theta: Scalar,
+                 thruster_characteristics: Mapping[str, Any], T_w: float,
+                 sigma: float) -> None:
         '''
             Simple constructor. Can be reworked to save constants for a plume.
         '''
@@ -752,7 +826,9 @@ class SimplifiedGasKinetics:
 
         return
 
-    def set_thruster_characteristics(self, thruster_characteristics):
+    def set_thruster_characteristics(
+        self, thruster_characteristics: Mapping[str, Any]
+    ) -> None:
         '''
             Setter for thruster-specific characteristics.
 
@@ -780,7 +856,7 @@ class SimplifiedGasKinetics:
 
         return
 
-    def get_beta(self, T):
+    def get_beta(self, T: float) -> float:
         '''
             Solves for beta at a given temperature.
 
@@ -797,7 +873,7 @@ class SimplifiedGasKinetics:
         beta = 1 / np.sqrt(2 * self.R * T)
         return beta
 
-    def get_speed_ratio(self, U, beta):
+    def get_speed_ratio(self, U: float, beta: float) -> float:
         '''
             Method to solve for the speed ratio of the flow at a specified flow.
 
@@ -817,7 +893,7 @@ class SimplifiedGasKinetics:
         S = U * beta
         return S
 
-    def set_Q_simple(self):
+    def set_Q_simple(self) -> None:
         '''
             Setter for Q in its simplified form. Returns Q'.
 
@@ -834,7 +910,7 @@ class SimplifiedGasKinetics:
 
         return
     
-    def set_K_simple(self):
+    def set_K_simple(self) -> None:
         '''
             Setter for simplified special factor K [Cai & Wang 2012, Eq. 10]
             with Q substituted by Q'. Stored scaled by exp(-S_0^2) for
@@ -854,7 +930,7 @@ class SimplifiedGasKinetics:
 
         return
 
-    def set_M_simple(self):
+    def set_M_simple(self) -> None:
         '''
             Setter for simplified special factor M [Cai & Wang 2012, Eq. 11]
             with Q substituted by Q'. Stored scaled by exp(-S_0^2) for
@@ -872,7 +948,7 @@ class SimplifiedGasKinetics:
 
         return
 
-    def set_N_simple(self):
+    def set_N_simple(self) -> None:
         '''
             Setter for simplified special factor N [Cai & Wang 2012, Eq. 12]
             with Q substituted by Q'. Stored scaled by exp(-S_0^2) for
@@ -890,7 +966,7 @@ class SimplifiedGasKinetics:
 
         return
     
-    def get_num_density_ratio(self):
+    def get_num_density_ratio(self) -> float:
         '''
             Method to calculate the number denisty at a point (X, 0, Z) outside of the nozzle.
             This density is normalized over the number density at the nozzle exit.
@@ -909,7 +985,7 @@ class SimplifiedGasKinetics:
         num_density_ratio = (self.K_simple / (2 * np.sqrt(np.pi)) * (self.R_0 / self.X) ** 2)
         return num_density_ratio
     
-    def get_U_normalized(self):
+    def get_U_normalized(self) -> float:
         '''
             Method to calculate the macroscopic x-component of velocity at a point (X, 0, Z) outside of the nozzle.
             This velocity component is normalized with the parameter beta at the exit. 
@@ -928,7 +1004,7 @@ class SimplifiedGasKinetics:
         U_normalized = self.M_simple / self.K_simple
         return U_normalized
     
-    def get_W_normalized(self):
+    def get_W_normalized(self) -> float:
         '''
             Method to calculate the macroscopic z-component of velocity at a point (X, 0, Z) outside of the nozzle.
             This velocity component is normalized with the parameter beta at the exit. 
@@ -947,7 +1023,7 @@ class SimplifiedGasKinetics:
         W_normalized = (self.M_simple / self.K_simple) * (self.Z / self.X)
         return W_normalized
 
-    def get_temp_ratio(self):
+    def get_temp_ratio(self) -> float:
         '''
             Method to calculate the temperature at a point (X, 0, Z) outside of the nozzle.
             This temperature is normalized over the temperature at the nozzle exit.
@@ -966,7 +1042,7 @@ class SimplifiedGasKinetics:
         T_ratio += (4 * self.N_simple / (3 * self.K_simple))
         return T_ratio
     
-    def get_num_density_centerline(self):
+    def get_num_density_centerline(self) -> float:
         '''
             Method to calculate the number denisty at a point (X, 0, 0) outside of the nozzle.
             This density is normalized over the number density at the nozzle exit.
@@ -988,7 +1064,7 @@ class SimplifiedGasKinetics:
 
         return n_ratio
     
-    def get_velocity_centerline(self):
+    def get_velocity_centerline(self) -> float:
         '''
             Method to calculate the macroscopic velocity at a point (X, 0, 0) outside of the nozzle.
             This velocity is normalized with the parameter beta at the exit. 
@@ -1013,7 +1089,7 @@ class SimplifiedGasKinetics:
         U_ratio = 1 / (2 * n_ratio) * ((p2 ** 2 * np.exp(- self.S_0 ** 2) / np.sqrt(np.pi)) + (self.S_0 * (1 + erf(self.S_0))) - (np.exp(- p2 ** 2 * self.S_0 ** 2) * p1 ** 3 * self.S_0 * (1 + erf(p1 * self.S_0))))
         return U_ratio
     
-    def get_temp_centerline(self):
+    def get_temp_centerline(self) -> float:
         '''
             Method to calculate the temperature at a point (X, 0, 0) outside of the nozzle.
             This temperature is normalized over the temperature at the nozzle exit.
@@ -1040,7 +1116,7 @@ class SimplifiedGasKinetics:
         n_ratio = self.get_num_density_centerline()
         U1 = self.get_velocity_centerline()
 
-        def integrand(r):
+        def integrand(r: float) -> float:
             Q = get_Q_full(r, 0.0, self.X, 0.0)
             return get_N_factor(Q, self.S_0) * r
 
@@ -1048,7 +1124,7 @@ class SimplifiedGasKinetics:
         temp_ratio = 4 / (3 * n_ratio * np.sqrt(np.pi) * self.X ** 2) * integral - (U1 ** 2 / (3/2))
         return temp_ratio
     
-    def get_pressure(self):
+    def get_pressure(self) -> float:
         '''
             Method to call gas-surface interaction model. Passes thruster characteristics and
             normalized plume parameters to the Maxwell model to solve for pressre.
@@ -1088,7 +1164,7 @@ class SimplifiedGasKinetics:
             pressure = get_maxwellian_pressure(rho_inf, U, S, self.sigma, self.theta, T, self.T_w)
         return pressure
     
-    def get_shear_pressure(self):
+    def get_shear_pressure(self) -> float:
         '''
             Method to call gas-surface interaction model. Passes thruster characteristics and
             normalized plume parameters to the Maxwell model to solve for shear pressre.
@@ -1128,7 +1204,7 @@ class SimplifiedGasKinetics:
             shear_pressure = get_maxwellian_shear_pressure(rho_inf, U, S, self.sigma, self.theta)
         return shear_pressure
     
-    def get_heat_flux(self):
+    def get_heat_flux(self) -> float:
         '''
             Method to call gas-surface interaction model. Passes thruster characteristics and
             normalized plume parameters to the Maxwell model to solve for heat flux.
@@ -1238,7 +1314,9 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
     QUAD_ORDERS = (40, 80, 160)
     QUAD_RTOL = 1e-9
 
-    def __init__(self, distance, theta, thruster_characteristics, T_w, sigma):
+    def __init__(self, distance: Scalar, theta: Scalar,
+                 thruster_characteristics: Mapping[str, Any], T_w: float,
+                 sigma: float) -> None:
         '''
             Mirrors SimplifiedGasKinetics(distance, theta,
             thruster_characteristics, T_w, sigma) exactly; X = d*cos(theta)
@@ -1250,7 +1328,9 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
 
         return
 
-    def _compute_field_integrals(self, order):
+    def _compute_field_integrals(
+        self, order: int
+    ) -> tuple[float, float, float, float]:
         '''
             Evaluate the four exit-disk integrals of Eqs. 5-8 with a
             tensor-product Gauss-Legendre rule of the given order per
@@ -1291,7 +1371,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
         I_N = np.sum(W2D * R * N)
         return I_K, I_M, I_W, I_N
 
-    def set_field_integrals(self):
+    def set_field_integrals(self) -> None:
         '''
             Setter for the field integrals I_K, I_M, I_W, I_N of
             Eqs. 5-8, with quadrature-order doubling until two
@@ -1326,7 +1406,11 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
 
         return
 
-    def _integrals_converged(self, previous, current):
+    def _integrals_converged(
+        self,
+        previous: tuple[float, float, float, float],
+        current: tuple[float, float, float, float],
+    ) -> bool:
         '''
             Convergence test between two quadrature orders. I_K, I_M and
             I_N are strictly positive, so a relative test applies; I_W
@@ -1355,7 +1439,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
                 and abs(I_N1 - I_N0) <= rtol * abs(I_N1)
                 and abs(I_W1 - I_W0) <= rtol * scale_W)
 
-    def get_num_density_ratio(self):
+    def get_num_density_ratio(self) -> float:
         '''
             Number density at (X, 0, Z) normalized by the exit number
             density, n_1/n_0 [Cai & Wang 2012, Eq. 5]. The exp(-S_0^2)
@@ -1372,7 +1456,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
         '''
         return self.I_K / (np.pi ** 1.5 * self.X ** 2)
 
-    def get_U_normalized(self):
+    def get_U_normalized(self) -> float:
         '''
             Macroscopic x-velocity at (X, 0, Z) normalized by
             sqrt(beta_0), i.e. U_1 * sqrt(beta_0) [Cai & Wang 2012,
@@ -1390,7 +1474,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
         '''
         return self.I_M / self.I_K
 
-    def get_W_normalized(self):
+    def get_W_normalized(self) -> float:
         '''
             Macroscopic z-velocity at (X, 0, Z) normalized by
             sqrt(beta_0), i.e. W_1 * sqrt(beta_0) [Cai & Wang 2012,
@@ -1412,7 +1496,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
         '''
         return self.I_W / (self.X * self.I_K)
 
-    def get_Vr_normalized(self):
+    def get_Vr_normalized(self) -> float:
         '''
             Radial (spherical, from the nozzle exit center) velocity
             component in the Y = 0 plane, normalized by sqrt(beta_0):
@@ -1432,7 +1516,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
         W = self.get_W_normalized()
         return (self.X * U + self.Z * W) / np.sqrt(self.X ** 2 + self.Z ** 2)
 
-    def get_temp_ratio(self):
+    def get_temp_ratio(self) -> float:
         '''
             Temperature at (X, 0, Z) normalized by the exit temperature,
             T_1/T_0 [Cai & Wang 2012, Eq. 8]. With beta_0 = 1/(2*R*T_0),
@@ -1452,7 +1536,7 @@ class CollisionlessGasKinetics(SimplifiedGasKinetics):
         W = self.get_W_normalized()
         return -(2 / 3) * (U ** 2 + W ** 2) + (4 / 3) * self.I_N / self.I_K
 
-    def get_pressure_ratio(self):
+    def get_pressure_ratio(self) -> float:
         '''
             Flowfield static pressure at (X, 0, Z) normalized by the exit
             static pressure: p_1/p_0 = (n_1/n_0) * (T_1/T_0) from the

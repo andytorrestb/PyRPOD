@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pyrpod.mission.state_vectors import StateVectors
 from pyrpod.mission.six_dof_dynamics import SixDOFDynamics
 from pyrpod.mission.fuel_management import FuelManager
@@ -7,10 +9,18 @@ from pyrpod.mission.post_processing import PostProcessor
 from pyrpod.mission.orbital_transfer import OrbitalTransferEngine
 from pyrpod.mission.MissionEnvironment import MissionEnvironment
 
+from pyrpod.rpod.JetFiringHistory import JetFiringHistory as JetFiringHistoryType
+from pyrpod.vehicle.LogisticsModule import LogisticsModule as LogisticsModuleType
+
 
 class MissionPlanner:
 
-    def __init__(self, environment: MissionEnvironment):
+    # Set as a CLASS attribute by PlumeStrikeEstimationStudy.calc_jfh_1d_approach
+    # (MissionPlanner.cant = np.radians(cant)) and read back from there.
+    # Declared bare so no attribute is created at import time.
+    cant: float
+
+    def __init__(self, environment: MissionEnvironment) -> None:
         self.environment = environment
 
         # Initialize submodules with context if needed
@@ -21,7 +31,7 @@ class MissionPlanner:
         self.dynamics = SixDOFDynamics()
         self.propellant = FuelManager(self.environment)
     
-    def set_lm(self, LogisticsModule):
+    def set_lm(self, LogisticsModule: LogisticsModuleType) -> None:
         """
             Simple setter method to set VV/LM used in analysis.
 
@@ -41,7 +51,7 @@ class MissionPlanner:
         """
         self.vv = LogisticsModule
     
-    def set_jfh(self, JetFiringHistory):
+    def set_jfh(self, JetFiringHistory: JetFiringHistoryType) -> None:
         """
             Simple setter method to set JFH used in propellant usage calculations.
 
@@ -56,17 +66,17 @@ class MissionPlanner:
         """
         self.jfh = JetFiringHistory
 
-    def load_components(self):
+    def load_components(self) -> None:
         self.flight_eval.load_plan()
 
-    def execute_mission(self):
+    def execute_mission(self) -> None:
         self.flight_eval.execute(self)
 
-    def analyze_maneuver(self):
+    def analyze_maneuver(self) -> None:
         dv, dw = self.state.get_deltas()
         self.dynamics.evaluate(dv, dw)
 
-    def summarize_results(self):
+    def summarize_results(self) -> None:
         self.post_processor.plot_burn_profiles()
         self.post_processor.plot_mass_usage()
         self.orbital_transfer.summarize()

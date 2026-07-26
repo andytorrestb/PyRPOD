@@ -3,9 +3,24 @@
     Alternatively these could be moved to JetFiringHistory.py
 """
 
-import sys
+from __future__ import annotations
 
-def print_JFH(t_values, r,  rot, file_name):
+import sys
+from collections.abc import Sequence
+from typing import Any
+
+import numpy as np
+from numpy.typing import NDArray
+
+# Callers pass either Python lists of per-axis rows (JetFiringHistory builds
+# ``r = [x, y, z]`` and a list of rotation matrices) or NumPy arrays of the
+# same shape, so the accurate bound is "indexable rows" rather than one
+# concrete container type.
+_Times = Sequence[float] | NDArray[np.float64]
+_Rows = Sequence[Any] | NDArray[Any]
+
+
+def print_JFH(t_values: _Times, r: _Rows, rot: _Rows, file_name: str) -> None:
     '''
         Helper function to RPOD.print_jfh_param_curve() that is responsible for
         printing the calculated JFH data to a text file.
@@ -84,7 +99,7 @@ def print_JFH(t_values, r,  rot, file_name):
             # print()
     sys.stdout = orig_stdout
 
-def print_test_JFH(t_values, r,  rot, file_name):
+def print_test_JFH(t_values: _Times, r: _Rows, rot: _Rows, file_name: str) -> None:
 
     '''
         Helper function to RPOD.print_jfh_param_curve() that is responsible for
@@ -166,7 +181,7 @@ def print_test_JFH(t_values, r,  rot, file_name):
             # print()
     sys.stdout = orig_stdout
 
-def print_1d_JFH(t_values, r,  rot, file_name):
+def print_1d_JFH(t_values: _Times, r: _Rows, rot: _Rows, file_name: str) -> None:
     '''
         Helper function to RPOD.print_jfh_param_curve() that is responsible for
         printing the calculated JFH data to a text file.

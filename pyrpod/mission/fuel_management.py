@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from pyrpod.mission.SubModule import SubModule
 import numpy as np
@@ -12,15 +16,27 @@ class FuelManager(SubModule):
     #     self.isp = isp
     #     self.mass = mass
 
-    def compute_burn_time(self, dv, thrust):
+    # Collaborator state and thruster-group helpers that this class reads but
+    # never defines. They come from the object that owns the fuel manager
+    # (see MissionPlanner/PlumeStrikeEstimationStudy and ThrusterGrouping);
+    # declared bare so no class attribute is created at runtime.
+    vv: Any
+    jfh: Any
+    cant: float
+    rotational_maneuvers: bool
+    calc_thrust_sum: Callable[[str], float]
+    calc_m_dot_sum: Callable[[str], float]
+    calc_v_e: Callable[[str], float]
+
+    def compute_burn_time(self, dv: float, thrust: float) -> None:
         # Simplified rocket equation stub
         pass
 
-    def compute_delta_mass(self, dv):
+    def compute_delta_mass(self, dv: float) -> None:
         # Return delta-mass from ideal rocket equation
         pass
 
-    def calc_burn_time(self, dv, isp, T):
+    def calc_burn_time(self, dv: float, isp: float, T: float) -> float:
         """
             Calculates burn time when given change in velocity (dv), specific impulse (isp), and thrust (T)
 
@@ -48,7 +64,7 @@ class FuelManager(SubModule):
         K=(isp*g_0*m_f*(np.exp(a) - 1))
         return K / T
 
-    def calc_delta_mass(self, dv, isp):
+    def calc_delta_mass(self, dv: float, isp: float) -> float:
         """
             Calculates propellant usage using expressions derived from the ideal rocket equation.
 
@@ -72,7 +88,8 @@ class FuelManager(SubModule):
         self.vv.mass += dm
         return dm
 
-    def calc_delta_v(self, dt, v_e, m_dot, m_current):
+    def calc_delta_v(self, dt: float, v_e: float, m_dot: float,
+                     m_current: float) -> float:
         """
             Calculates change in velocity from the Tsiolkovsky equation given change in time (dt), exhaust velocity (v_e), and mass flow rate (m_dot).
 
@@ -98,7 +115,7 @@ class FuelManager(SubModule):
         dv = v_e*np.log(((m_dot*dt)/m_current)+1)
         return dv
     
-    def calc_delta_omega_rotation(self, dm, group):
+    def calc_delta_omega_rotation(self, dm: float, group: str) -> float:
         """
             Calculates the angular velocity by discretizing the propellant expenditure
             and iteratively solving the rotational form of Newton's Second Law with updated moments of inertia.
@@ -125,7 +142,8 @@ class FuelManager(SubModule):
         
         return dw
 
-    def calc_delta_mass_rotation(self, dw, group, forward_propagation):
+    def calc_delta_mass_rotation(self, dw: float, group: str,
+                                 forward_propagation: bool) -> float:
         """
             Calculates propellant usage for a rotational maneuver by discretizing the desired angular velocity
             and iteratively solving the rotational form of Newton's Second Law with updated moments of inertia.
@@ -170,7 +188,8 @@ class FuelManager(SubModule):
                 logger.error('ERROR: functionality not added for a roll rotation')
         return dm
 
-    def calc_delta_mass_v_e(self, dv, v_e, forward_propagation):
+    def calc_delta_mass_v_e(self, dv: float, v_e: float,
+                            forward_propagation: bool) -> float:
         """
             Calculates propellant usage using expressions derived from the ideal rocket equation.
 
@@ -202,7 +221,7 @@ class FuelManager(SubModule):
 
         return dm
 
-    def calc_total_delta_mass(self):
+    def calc_total_delta_mass(self) -> None:
         """
             Sums total propellant expenditure.
             Starts with calculating the propellant expenditure for the JFH twice (approach which back propagates with a starting mass of 14,000 kg,
@@ -218,7 +237,7 @@ class FuelManager(SubModule):
             Total change in mass.
         """
         # Initialization
-        self.dm_total = 0
+        self.dm_total: float = 0
         dm_jfh_total = 0
         payload_mass = 5400
         # Docking mass and post delivery mass
@@ -233,7 +252,7 @@ class FuelManager(SubModule):
             if self.jfh.JFH != None and len(self.jfh.JFH) > 0:
                 # Read the JFH and add propellant expended for each firing to a sum
                 for f in range(len(self.jfh.JFH)):
-                    dm = 0
+                    dm: float = 0
                     # Backpropagate with a vv.mass of 14,000 kg to find the vv.mass pre-approach
                     if m == 0:
                         forward_propagation = False
@@ -372,7 +391,7 @@ class FuelManager(SubModule):
                             # print('-------- dm / 10 is', (dm / 10))
                             # Disregarding minimum duty cycle, discretize the dm
                             discretizing_resolution = 0.0001 # kg / s
-                            dw_sum_rot = 0 # rad / s
+                            dw_sum_rot: float = 0 # rad / s
                             num_iters = round(((dm / 10) / np.cos(self.cant)) / (discretizing_resolution))
                             for i in range(num_iters):
                                 dw_rot = self.calc_delta_omega_rotation(discretizing_resolution, 'pos_pitch')
@@ -380,7 +399,7 @@ class FuelManager(SubModule):
                             # print('dw_sum_rot is', dw_sum_rot)
                             
                             discretizing_resolution = 0.0001 # rad / s
-                            dm_sum_rot = 0
+                            dm_sum_rot: float = 0
                             # Currently the rotation calculation is hardcoded for the pitch maneuver, which is why two is subtracted
                             num_iters = round(dw_sum_rot / discretizing_resolution)
                             

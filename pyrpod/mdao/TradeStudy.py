@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import os
 import csv
 import time
 import logging
+from collections.abc import Mapping
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,17 +16,26 @@ from pyrpod.mdao import SweepConfig
 from pyrpod.util.io.fs import ensure_dir
 import configparser
 
+from pyrpod.vehicle.LogisticsModule import LogisticsModule
+from pyrpod.vehicle.TargetVehicle import TargetVehicle
+
 logger = logging.getLogger(__name__)
 
 
 class TradeStudy():
-    def __init__(self, case_dir):
+    # Built by init_trade_study and read by every sweep; max_v0 is recorded
+    # by the sweeps and read back by print_mission_report. Declared bare so
+    # no class attribute is created at runtime.
+    rpod: Any
+    max_v0: Any
+
+    def __init__(self, case_dir: str) -> None:
         self.case_dir = case_dir
         config = configparser.ConfigParser()
         config.read(self.case_dir + "config.ini")
         self.config = config
 
-    def init_trade_study(self, lm, tv):
+    def init_trade_study(self, lm: LogisticsModule, tv: TargetVehicle) -> None:
         """
         Organizes data needed to kick off an RPOD trade study.
 
@@ -35,11 +49,14 @@ class TradeStudy():
         jfh = JetFiringHistory.JetFiringHistory(case_dir)
 
         # Instantiate RPOD object.
-        rpod = PlumeStrikeEstimationStudy.RPOD(case_dir)
+        # The class in that module is PlumeStrikeEstimationStudy; there is no
+        # RPOD, so this raises AttributeError. Renaming it is a behavior
+        # change (see deferred observations), so it is flagged here.
+        rpod = PlumeStrikeEstimationStudy.RPOD(case_dir)  # type: ignore[attr-defined]
         rpod.study_init(jfh, tv, lm)
         self.rpod = rpod
 
-    def init_trade_study_case(self):
+    def init_trade_study_case(self) -> None:
         """
         Resets JFH data according to current case key.
 
@@ -53,7 +70,7 @@ class TradeStudy():
 
         self.rpod.jfh = jfh
 
-    def print_mission_report(self):
+    def print_mission_report(self) -> None:
 
         case_key = self.rpod.get_case_key()
 
@@ -91,7 +108,7 @@ class TradeStudy():
                 max_cum_heat_load
             ])
 
-    def graph_mission_report(self, report_results):
+    def graph_mission_report(self, report_results: pd.DataFrame) -> None:
         """
         """
         # Extract the first column (assuming it's the parameter you want to plot against)
@@ -116,7 +133,7 @@ class TradeStudy():
         plt.show()
 
 
-    def interpret_mission_report(self):
+    def interpret_mission_report(self) -> None:
         """
         """
         report_path = self.case_dir + 'results/MissionReport.csv'
@@ -154,7 +171,9 @@ class TradeStudy():
         report_results['PlumeFailureMode'] = plume_failure_mode
         self.graph_mission_report(report_results)
 
-    def run_axial_overshoot_sweep(self, sweep_vars, lm, tv):
+    def run_axial_overshoot_sweep(self, sweep_vars: Mapping[str, Any],
+                                  lm: LogisticsModule,
+                                  tv: TargetVehicle) -> None:
         """
         Simple variable sweep study that assesses RCS performance for a given set of axial overshoot velocity values.
         """
@@ -210,7 +229,9 @@ class TradeStudy():
                     time.perf_counter() - study_start)
         self.interpret_mission_report()
 
-    def run_surface_cant_sweep(self, sweep_vars, lm, tv):
+    def run_surface_cant_sweep(self, sweep_vars: Mapping[str, Any],
+                               lm: LogisticsModule,
+                               tv: TargetVehicle) -> None:
         """
         """
 
@@ -259,7 +280,9 @@ class TradeStudy():
             self.print_mission_report()
         self.interpret_mission_report()
 
-    def run_multi_var_sweep(self, sweep_vars, lm, tv):
+    def run_multi_var_sweep(self, sweep_vars: Mapping[str, Any],
+                            lm: LogisticsModule,
+                            tv: TargetVehicle) -> None:
         """
         """
         # Organize variables to sweet over.

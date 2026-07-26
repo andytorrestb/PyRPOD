@@ -48,7 +48,7 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TypeVar
 
 import numpy as np
 
@@ -106,7 +106,9 @@ _INI_BOOL_KEYS = (
 )
 
 
-def _read_logging_ini(case_dir: str):
+def _read_logging_ini(
+    case_dir: str,
+) -> tuple[configparser.SectionProxy | None, str]:
     """Return (``[logging]`` section proxy or None, ini path)."""
     ini_path = os.path.join(case_dir, "logging.ini")
     if not os.path.isfile(ini_path):
@@ -121,27 +123,34 @@ def _read_logging_ini(case_dir: str):
     return parser["logging"], ini_path
 
 
-def _apply_ini(settings: LoggingSettings, section) -> None:
+def _apply_ini(settings: LoggingSettings,
+               section: configparser.SectionProxy) -> None:
     for key in _INI_BOOL_KEYS:
         if key in section:
             try:
                 setattr(settings, key, section.getboolean(key))
             except ValueError:
                 pass
+    # SectionProxy.get()/getint() are typed as returning ``| None`` because
+    # configparser supports allow_no_value=True. _read_logging_ini builds a
+    # plain ConfigParser() (allow_no_value=False), so an option that passes the
+    # ``in section`` guard above always carries a value; the stub cannot say so.
     if "level" in section:
-        settings.level = section.get("level")
+        settings.level = section.get("level")  # type: ignore[assignment]
     if "format" in section:
-        settings.log_format = section.get("format")
+        settings.log_format = section.get("format")  # type: ignore[assignment]
     if "progress_every_n_firings" in section:
         try:
-            settings.progress_every_n_firings = section.getint(
-                "progress_every_n_firings"
+            settings.progress_every_n_firings = (
+                section.getint("progress_every_n_firings")  # type: ignore[assignment]
             )
         except ValueError:
             pass
 
 
-def _resolve_settings(case_dir: str, overrides: Dict[str, Any]):
+def _resolve_settings(
+    case_dir: str, overrides: Dict[str, Any]
+) -> tuple[LoggingSettings, bool, str]:
     """Resolve :class:`LoggingSettings` following the documented precedence."""
     settings = LoggingSettings()
 
@@ -188,7 +197,13 @@ class _LevelCounter(logging.Handler):
             self.warning_count += 1
 
 
-def _mark_owned(handler: logging.Handler) -> logging.Handler:
+# Marking a handler returns the *same* handler, so the concrete subclass must
+# survive the call: configure_logging feeds the result straight into
+# LoggingSession(_counter=...), which is typed _LevelCounter.
+_HandlerT = TypeVar("_HandlerT", bound=logging.Handler)
+
+
+def _mark_owned(handler: _HandlerT) -> _HandlerT:
     setattr(handler, _OWNED_HANDLER_ATTR, True)
     return handler
 
@@ -204,7 +219,7 @@ def _remove_owned_handlers(logger: logging.Logger) -> None:
                 pass
 
 
-def _level_to_int(level) -> int:
+def _level_to_int(level: int | str) -> int:
     if isinstance(level, int):
         return level
     return getattr(logging, str(level).upper(), logging.INFO)

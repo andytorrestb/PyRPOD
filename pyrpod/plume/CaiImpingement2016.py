@@ -111,7 +111,12 @@ by n_0*m*U_0^2/2, heat flux by n_0*m*U_0^3/2 (m = molecular mass); they are
 dimensionless and independent of n_0.
 """
 
+from __future__ import annotations
+
+from typing import Any, TypeAlias
+
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 from scipy.special import erf
 
 from pyrpod.plume.RarefiedPlumeGasKinetics import (
@@ -121,6 +126,11 @@ from pyrpod.plume.RarefiedPlumeGasKinetics import (
     get_Q_full,
 )
 
+# Local shorthands: every routine here returns float64 arrays, or a dict of
+# them keyed by coefficient name.
+FloatArray: TypeAlias = "NDArray[np.float64]"
+CoefficientField: TypeAlias = "dict[str, NDArray[np.float64]]"
+
 #: Gauss-Legendre order per axis for the exit-disk integrals. The integrand
 #: is analytic on the compact disk (denominators bounded below by X^2 > 0),
 #: so convergence is geometric; 48 nodes reach ~1e-12 for every geometry in
@@ -128,7 +138,9 @@ from pyrpod.plume.RarefiedPlumeGasKinetics import (
 DEFAULT_ORDER = 48
 
 
-def _scaled_A_factors(a, S_0):
+def _scaled_A_factors(
+    a: FloatArray, S_0: float
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     '''
         Appendix-A factors A_1, A_2, A_3 evaluated at a and pre-multiplied
         by the solutions' e^(-S_0^2) prefactor, combined overflow-safely
@@ -156,7 +168,9 @@ def _scaled_A_factors(a, S_0):
     return A1, A2, A3
 
 
-def plate_point_coords(s, tau, alpha_0, L):
+def plate_point_coords(
+    s: ArrayLike, tau: ArrayLike, alpha_0: float, L: float
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     '''
         Global coordinates of plate points from local plate coordinates
         (see module docstring for the convention).
@@ -183,8 +197,10 @@ def plate_point_coords(s, tau, alpha_0, L):
     return X, Y, Z
 
 
-def surface_coefficients(X, Y, Z, S_0, alpha_0, eps, R_0,
-                         order=DEFAULT_ORDER, chunk=256):
+def surface_coefficients(X: ArrayLike, Y: ArrayLike, Z: ArrayLike,
+                         S_0: float, alpha_0: float, eps: float,
+                         R_0: float, order: int = DEFAULT_ORDER,
+                         chunk: int = 256) -> CoefficientField:
     '''
         Exact surface coefficients of Cai 2016 Eqs. 9-14 at global plate
         points (X, Y, Z), vectorized with tensor-product Gauss-Legendre
@@ -296,8 +312,10 @@ def surface_coefficients(X, Y, Z, S_0, alpha_0, eps, R_0,
             'Cp_s': Cp_s.reshape(shape), 'nw': nw.reshape(shape)}
 
 
-def surface_coefficients_plate(s, tau, S_0, alpha_0, eps, R_0, L,
-                               order=DEFAULT_ORDER):
+def surface_coefficients_plate(s: ArrayLike, tau: ArrayLike, S_0: float,
+                               alpha_0: float, eps: float, R_0: float,
+                               L: float,
+                               order: int = DEFAULT_ORDER) -> CoefficientField:
     '''
         Convenience wrapper of surface_coefficients over local plate
         coordinates (s, tau); see plate_point_coords for the mapping.
@@ -311,8 +329,10 @@ def surface_coefficients_plate(s, tau, S_0, alpha_0, eps, R_0, L,
     return surface_coefficients(X, Y, Z, S_0, alpha_0, eps, R_0, order=order)
 
 
-def averaged_coefficients(S_0, alpha_0, eps, R_0, L, W_0, H_0,
-                          n_gl=64, order=DEFAULT_ORDER):
+def averaged_coefficients(S_0: float, alpha_0: float, eps: float,
+                          R_0: float, L: float, W_0: float, H_0: float,
+                          n_gl: int = 64,
+                          order: int = DEFAULT_ORDER) -> dict[str, float]:
     '''
         Plate-averaged properties of Eq. 15 by Gauss-Legendre quadrature
         over the plate: CP, CF1, CF2, CQ, the moment coefficient
@@ -360,7 +380,9 @@ def averaged_coefficients(S_0, alpha_0, eps, R_0, L, W_0, H_0,
 # Section 3: 2D slot jet impinging on an inclined planar plate (Eqs. 1-8)
 # ---------------------------------------------------------------------------
 
-def _scaled_planar_factors(a, S):
+def _scaled_planar_factors(
+    a: FloatArray, S: float
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     '''
         e^(-S^2)-scaled polar-velocity wedge moments e^(a^2) * I_k(a) of a
         drifting Maxwellian in 2D, k = 1, 2, 3, where
@@ -381,7 +403,8 @@ def _scaled_planar_factors(a, S):
     return E1, A0, A1
 
 
-def _scaled_G_factor(a, S):
+def _scaled_G_factor(a: NDArray[np.float64],
+                     S: float) -> NDArray[np.float64]:
     '''
         e^(-S^2)-scaled energy-flux integrand of Eq. 4,
         G(a) = (sqrt(pi)/2)(2 + 7a^2 + 2a^4) e^(a^2) [1 + erf(a)] + 3a + a^3.
@@ -393,14 +416,17 @@ def _scaled_G_factor(a, S):
             + (3 * a + a ** 3) * np.exp(-S ** 2))
 
 
-def planar_plate_point_coords(s, alpha_0, L):
+def planar_plate_point_coords(
+    s: ArrayLike, alpha_0: float, L: float
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     '''2D plate point (X, Y) = (L + s cos(alpha_0), s sin(alpha_0)).'''
     s = np.asarray(s, dtype=float)
     return L + s * np.cos(alpha_0), s * np.sin(alpha_0)
 
 
-def planar_surface_coefficients(s, S_0, alpha_0, eps, H, L,
-                                order=DEFAULT_ORDER):
+def planar_surface_coefficients(s: ArrayLike, S_0: float, alpha_0: float,
+                                eps: float, H: float, L: float,
+                                order: int = DEFAULT_ORDER) -> CoefficientField:
     '''
         Exact 2D surface coefficients of Cai 2016 Eqs. 2-4 and 8 at plate
         positions s (distance from the plate center along the plate).
@@ -442,7 +468,7 @@ def planar_surface_coefficients(s, S_0, alpha_0, eps, H, L,
     I_q = np.sum(w * Gs * mu_p, axis=1)
     I_n = np.sum(w * A0s * mu_p, axis=1)
 
-    def expand(vals):
+    def expand(vals: NDArray[Any]) -> NDArray[np.float64]:
         full = np.zeros(X.size)
         full[ahead] = vals
         return full.reshape(shape)
@@ -456,7 +482,8 @@ def planar_surface_coefficients(s, S_0, alpha_0, eps, H, L,
             'Cf_d': Cf_d, 'Cq_d': Cq_d, 'Cp_s': 2.0 * Cp_jet, 'nw': nw}
 
 
-def _mirror_about_plate_2d(p, alpha_0, L):
+def _mirror_about_plate_2d(p: ArrayLike, alpha_0: float,
+                           L: float) -> NDArray[np.float64]:
     '''Mirror 2D point(s) about the plate line through (L, 0) at alpha_0.'''
     n_hat = np.array([-np.sin(alpha_0), np.cos(alpha_0)])
     p = np.asarray(p, dtype=float)
@@ -464,8 +491,11 @@ def _mirror_about_plate_2d(p, alpha_0, L):
     return p - 2.0 * d[..., None] * n_hat
 
 
-def planar_flowfield(X, Y, S_0, alpha_0, eps, H, L, W, plate='diffuse',
-                     order=DEFAULT_ORDER, nw_grid=1024):
+def planar_flowfield(X: ArrayLike, Y: ArrayLike, S_0: float,
+                     alpha_0: float, eps: float, H: float, L: float,
+                     W: float, plate: str | None = 'diffuse',
+                     order: int = DEFAULT_ORDER,
+                     nw_grid: int = 1024) -> CoefficientField:
     '''
         Combined 2D flowfield moments at points (X, Y) for the Section-3
         problem: the free slot jet plus either the diffuse-plate wall
@@ -500,8 +530,10 @@ def planar_flowfield(X, Y, S_0, alpha_0, eps, H, L, W, plate='diffuse',
     MY = np.zeros(Xa.size)
     M2 = np.zeros(Xa.size)
 
-    def add_population(th_lo, span, drift_angle, S, beta_ratio,
-                       n_ref=None):
+    def add_population(th_lo: NDArray[np.float64],
+                       span: NDArray[np.float64], drift_angle: float,
+                       S: float, beta_ratio: float,
+                       n_ref: NDArray[np.float64] | None = None) -> None:
         '''Wedge population moments; n_ref = None means constant n_0.'''
         nonlocal N, MX, MY, M2
         theta = th_lo + span * 0.5 * (nodes[None, :] + 1.0)
@@ -572,7 +604,7 @@ def planar_flowfield(X, Y, S_0, alpha_0, eps, H, L, W, plate='diffuse',
         Uy = MY / N
         T = (2.0 / 3.0) * (M2 / N - Ux ** 2 - Uy ** 2)
 
-    def expand(vals):
+    def expand(vals: NDArray[Any]) -> NDArray[np.float64]:
         full = np.full(Xf.size, np.nan)
         full[valid] = vals
         return full.reshape(shape)
@@ -585,8 +617,19 @@ def planar_flowfield(X, Y, S_0, alpha_0, eps, H, L, W, plate='diffuse',
 # Section 4 flowfield pressure in the Y = 0 plane (Figs. 15-16)
 # ---------------------------------------------------------------------------
 
-def _plate_emission_moments(Xa, Za, Px, Py, Pz, nw, wA, alpha_0, eps,
-                            chunk=128):
+def _plate_emission_moments(
+    Xa: NDArray[np.float64],
+    Za: NDArray[np.float64],
+    Px: NDArray[np.float64],
+    Py: NDArray[np.float64],
+    Pz: NDArray[np.float64],
+    nw: NDArray[np.float64],
+    wA: NDArray[np.float64],
+    alpha_0: float,
+    eps: float,
+    chunk: int = 128,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64],
+           NDArray[np.float64], NDArray[np.float64]]:
     '''
         Raw-moment contributions of the diffuse-wall emission at field
         points (Xa, 0, Za): solid-angle integrals over plate nodes
@@ -625,8 +668,11 @@ def _plate_emission_moments(Xa, Za, Px, Py, Pz, nw, wA, alpha_0, eps,
     return dN, dMx, dMy, dMz, dM2
 
 
-def _jet_moments_3d(x_loc, rho_loc, S_0, R_0, order=DEFAULT_ORDER,
-                    chunk=256):
+def _jet_moments_3d(
+    x_loc: ArrayLike, rho_loc: ArrayLike, S_0: float, R_0: float,
+    order: int = DEFAULT_ORDER, chunk: int = 256,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64],
+           NDArray[np.float64]]:
     '''
         Raw moments (n/n_0, U*sqrt(beta_0), W*sqrt(beta_0),
         M2 = n <c^2> beta_0^2 / n_0) of the free round jet at local
@@ -673,9 +719,13 @@ def _jet_moments_3d(x_loc, rho_loc, S_0, R_0, order=DEFAULT_ORDER,
     return n, U, W, M2
 
 
-def flowfield_pressure_plane(X, Z, S_0, alpha_0, eps, R_0, L, W_0, H_0,
-                             plate='diffuse', order=DEFAULT_ORDER,
-                             plate_order=48, chunk=128):
+def flowfield_pressure_plane(X: ArrayLike, Z: ArrayLike, S_0: float,
+                             alpha_0: float, eps: float, R_0: float,
+                             L: float, W_0: float, H_0: float,
+                             plate: str | None = 'diffuse',
+                             order: int = DEFAULT_ORDER,
+                             plate_order: int = 48,
+                             chunk: int = 128) -> CoefficientField:
     '''
         Static-pressure field p/p_0 = (n/n_0)(T/T_0) in the vertical Y = 0
         plane for the Section-4 3D impingement problem (Figs. 15-16),
@@ -761,7 +811,7 @@ def flowfield_pressure_plane(X, Z, S_0, alpha_0, eps, R_0, L, W_0, H_0,
         T = (2.0 / 3.0) * (M2 / N - Vx ** 2 - Vy ** 2 - Vz ** 2)
         p = N * T
 
-    def expand(vals):
+    def expand(vals: NDArray[Any]) -> NDArray[np.float64]:
         full = np.full(Xf.size, np.nan)
         full[valid] = vals
         return full.reshape(shape)
@@ -769,8 +819,10 @@ def flowfield_pressure_plane(X, Z, S_0, alpha_0, eps, R_0, L, W_0, H_0,
     return {'n': expand(N), 'T': expand(T), 'p': expand(p)}
 
 
-def run_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0), eps=1.5,
-                      R_0=0.5, L=4.0, verbose=True):
+def run_sanity_checks(S_0: float = 2.0,
+                      alpha_0: float = np.deg2rad(60.0), eps: float = 1.5,
+                      R_0: float = 0.5, L: float = 4.0,
+                      verbose: bool = True) -> dict[str, float]:
     '''
         Built-in verification of the implementation:
 
@@ -812,9 +864,11 @@ def run_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0), eps=1.5,
     sin_a, cos_a = np.sin(alpha_0), np.cos(alpha_0)
     for s0, t0 in [(0.0, 0.0), (1.5, -2.0), (-2.5, 3.0)]:
         X, Y, Z = plate_point_coords(s0, t0, alpha_0, L)
-        X, Y, Z = float(X), float(Y), float(Z)
+        # Deliberate 0-d array -> scalar narrowing: the spot check feeds these
+        # to scipy.integrate.dblquad, which wants plain floats.
+        X, Y, Z = float(X), float(Y), float(Z)  # type: ignore[assignment]
 
-        def flux_integrand(r, th):
+        def flux_integrand(r: float, th: float) -> float:
             dy = Y - r * np.cos(th)
             dz = Z - r * np.sin(th)
             Q = np.sqrt((X ** 2 + dy ** 2 + dz ** 2) / X ** 2)
@@ -848,8 +902,11 @@ def run_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0), eps=1.5,
     return results
 
 
-def run_planar_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0), eps=1.5,
-                             H=0.5, L=4.0, W=5.0, verbose=True):
+def run_planar_sanity_checks(S_0: float = 2.0,
+                             alpha_0: float = np.deg2rad(60.0),
+                             eps: float = 1.5, H: float = 0.5,
+                             L: float = 4.0, W: float = 5.0,
+                             verbose: bool = True) -> dict[str, float]:
     '''
         Verification of the Section-3 (2D planar) implementation:
 
@@ -888,7 +945,7 @@ def run_planar_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0), eps=1.5,
     for s0 in (0.0, -2.0, 3.0):
         X, Y = planar_plate_point_coords(s0, alpha_0, L)
 
-        def flux_integrand(theta):
+        def flux_integrand(theta: float) -> float:
             a = S_0 * np.cos(theta)
             _, A0s, _ = _scaled_planar_factors(np.asarray(a), S_0)
             return float(A0s) * max(np.sin(alpha_0 - theta), 0.0)
@@ -935,9 +992,12 @@ def run_planar_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0), eps=1.5,
     return results
 
 
-def run_flowfield3d_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0),
-                                  eps=1.5, R_0=0.5, L=4.0, W_0=4.0,
-                                  H_0=4.0, verbose=True):
+def run_flowfield3d_sanity_checks(S_0: float = 2.0,
+                                  alpha_0: float = np.deg2rad(60.0),
+                                  eps: float = 1.5, R_0: float = 0.5,
+                                  L: float = 4.0, W_0: float = 4.0,
+                                  H_0: float = 4.0,
+                                  verbose: bool = True) -> dict[str, float]:
     '''
         Verification of the Section-4 flowfield-pressure implementation
         (Figs. 15-16):
@@ -960,8 +1020,10 @@ def run_flowfield3d_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0),
     from scipy import integrate
 
     results = {}
-    kw = dict(S_0=S_0, alpha_0=alpha_0, eps=eps, R_0=R_0, L=L,
-              W_0=W_0, H_0=H_0)
+    # Heterogeneous keyword bundle forwarded with ** into
+    # flowfield_pressure_plane, whose parameters are not all float.
+    kw: dict[str, Any] = dict(S_0=S_0, alpha_0=alpha_0, eps=eps, R_0=R_0, L=L,
+                              W_0=W_0, H_0=H_0)
 
     # 1. uniform-emitter sum rule (synthetic plate, alpha_0 = 90 deg so
     # the plate normal is -x and "on-axis height" is along x)
@@ -987,7 +1049,7 @@ def run_flowfield3d_sanity_checks(S_0=2.0, alpha_0=np.deg2rad(60.0),
     emission_gl = float(both['n'][0] - jet['n'][0])
     n_hat3 = np.array([-np.sin(alpha_0), 0.0, np.cos(alpha_0)])
 
-    def integrand(tau, s):
+    def integrand(tau: float, s: float) -> float:
         px, py, pz = plate_point_coords(s, tau, alpha_0, L)
         nw = float(surface_coefficients(
             np.array([px]), np.array([py]), np.array([pz]),

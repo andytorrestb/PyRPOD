@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from stl import mesh
 import numpy as np
+from numpy.typing import NDArray
 import os
 import configparser
 import logging
+from collections.abc import Mapping
+from typing import Any
 
 from pyevtk.vtk import VtkTriangle, VtkQuad
 from pyrpod.util.stl.stl import convert_stl_to_vtk
@@ -30,13 +35,13 @@ class Vehicle:
         convert_stl_to_vtk(cellData, mesh)
             Converts STL mesh to a VTK file and attaches surface properties supplied in cellData.
     """
-    def __init__(self, case_dir):
+    def __init__(self, case_dir: str) -> None:
         self.case_dir = case_dir
         config = configparser.ConfigParser()
         config.read(self.case_dir + "config.ini")
         self.config = config
 
-    def set_stl(self):
+    def set_stl(self) -> None:
         """
             Reads in Vehicle surface mesh from STL file.
 
@@ -60,7 +65,12 @@ class Vehicle:
                     len(self.mesh.vectors))
         return
 
-    def convert_stl_to_vtk_strikes(self, path_to_vtk, cellData, mesh):
+    def convert_stl_to_vtk_strikes(
+        self,
+        path_to_vtk: str | None,
+        cellData: Mapping[str, NDArray[Any]] | None,
+        mesh: mesh.Mesh | None,
+    ) -> None:
         """
             Converts STL mesh to a VTK file and attaches surface properties supplied in cellData.
 
@@ -86,7 +96,7 @@ class Vehicle:
         return
 
 
-    def convert_stl_to_vtk(self):
+    def convert_stl_to_vtk(self) -> None:
         """
             Converts STL mesh to a VTK file and attaches surface properties supplied in cellData.
 

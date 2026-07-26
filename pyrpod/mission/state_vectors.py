@@ -1,13 +1,21 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any
+
 import numpy as np
+from numpy.typing import NDArray
 
 class StateVectors:
-    def __init__(self, v=None, w=None):
+    def __init__(self, v: Sequence[float] | None = None,
+                 w: Sequence[float] | None = None) -> None:
         self.v_current = np.array(v) if v else np.zeros(3)
         self.w_current = np.array(w) if w else np.zeros(3)
         self.v_desired = np.zeros(3)
         self.w_desired = np.zeros(3)
 
-    def set_current_6dof_state(self, v = [0, 0, 0], w = [0,0,0]):
+    def set_current_6dof_state(self, v: Sequence[float] = [0, 0, 0],
+                               w: Sequence[float] = [0, 0, 0]) -> None:
         """
             Sets current inertial state for the VV. Can be done manually or read from flight plan.
 
@@ -28,7 +36,8 @@ class StateVectors:
         self.w_current = np.array(w)
         return
 
-    def set_desired_6dof_state(self, v = [0, 0, 0], w = [0,0,0]):
+    def set_desired_6dof_state(self, v: Sequence[float] = [0, 0, 0],
+                               w: Sequence[float] = [0, 0, 0]) -> None:
         """
             Sets desired inertial state for the VV. Can be done manually or read from flight plan.
 
@@ -49,5 +58,5 @@ class StateVectors:
         self.w_desired = np.array(w)
         return
 
-    def get_deltas(self):
+    def get_deltas(self) -> tuple[NDArray[Any], NDArray[Any]]:
         return self.v_desired - self.v_current, self.w_desired - self.w_current

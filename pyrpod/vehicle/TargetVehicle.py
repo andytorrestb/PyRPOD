@@ -34,7 +34,7 @@ class TargetVehicle(Vehicle):
 
     """
 
-    def set_stl(self):
+    def set_stl(self) -> None:
         """
             Reads in Vehicle surface mesh from STL file.
 
@@ -61,7 +61,7 @@ class TargetVehicle(Vehicle):
         log_array_summary(logger, "target_mesh_vectors", self.mesh.vectors)
         return
 
-    def set_stl_elements(self):
+    def set_stl_elements(self) -> None:
         """
             place holder method now. A strech goal could be to 
             load in a multi surface stl file which accounts for 
@@ -71,8 +71,8 @@ class TargetVehicle(Vehicle):
         print('')
         return
 
-    def set_v_ida(self, v_ida):
+    def set_v_ida(self, v_ida: float) -> None:
         self.v_ida = v_ida
 
-    def set_r_o(self, r_o):
+    def set_r_o(self, r_o: float) -> None:
         self.r_o = r_o

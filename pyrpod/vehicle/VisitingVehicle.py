@@ -1,42 +1,70 @@
+from __future__ import annotations
+
 import pandas as pd
 
 from stl import mesh
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 import math
 import os
 import re
 import logging
+from collections.abc import Iterable, Sequence
+from typing import Any, TypedDict
 
 from pyrpod.vehicle.Vehicle import Vehicle
-from pyrpod.mdao import SweepConfig
 from pyrpod.logging_utils import log_asset, log_array_summary
 from pyrpod.util.io.fs import resolve_asset_path
 
 logger = logging.getLogger(__name__)
 
+
+# One parsed entry of the thruster configuration file (TCF), as produced by
+# process_thruster_def() and stored in VisitingVehicle.thruster_data. Declared
+# total=False purely so the parser can populate it key by key; every key is
+# always present on a fully parsed entry. 'name' and 'type' are one-element
+# lists and 'exit' is a one-element list of [x, y, z]; that shape is load
+# bearing (callers index ['name'][0], ['exit'][0]) and is not changed here.
+# 'dcm' is nested lists as parsed, but SweepConfig's cant sweeps replace it
+# with an ndarray in place, so both forms are accepted.
+class ThrusterConfig(TypedDict, total=False):
+    name: list[str]
+    type: list[str]
+    exit: list[list[float]]
+    dcm: list[list[float]] | NDArray[np.float64]
+
+
+# One parsed entry of the cluster configuration file (CCF). Same shape as
+# ThrusterConfig minus 'type'.
+class ClusterConfig(TypedDict, total=False):
+    name: list[str]
+    exit: list[list[float]]
+    dcm: list[list[float]] | NDArray[np.float64]
+
+
 # Adapted from
 # https://stackoverflow.com/questions/54616049/converting-a-rotation-matrix-to-euler-angles-and-back-special-case
-def rot2eul(R):
+def rot2eul(R: NDArray[np.float64]) -> NDArray[np.float64]:
     beta = -np.arcsin(R[2][0])
     alpha = np.arctan2(R[2][1]/np.cos(beta),R[2][2]/np.cos(beta))
     gamma = np.arctan2(R[1][0]/np.cos(beta),R[0][0]/np.cos(beta))
     return np.array((alpha, beta, gamma))
 
 # Helper functions for constructer. 
-def process_coordinates(str_coord):
+def process_coordinates(str_coord: str) -> list[float]:
     # Split str at spaces
     str_list = str_coord.split(' ')
     # Return as list of floats
     return [float(x) for x in str_list]
 
 # Process definition of an individual thruster.
-def process_thruster_def(str_thruster):
+def process_thruster_def(str_thruster: str) -> ThrusterConfig:
     columns = ['name', 'type', 'exit', 'dcm']
     # thruster = pd.DataFrame(columns = columns)
     # print(thruster.dtypes)
-    thruster = {}
+    thruster: ThrusterConfig = {}
     # Remove new line char (last char) and split at any space char.    
     str_list = str_thruster[:-1].split(' ')
     # str_list = str_thruster.split(' ')
@@ -65,7 +93,9 @@ def process_thruster_def(str_thruster):
     return thruster
 
 # Wrapper function
-def process_str_thrusters(str_thrusters):
+def process_str_thrusters(
+    str_thrusters: Iterable[str],
+) -> dict[str, ThrusterConfig]:
     # dcm = direction cosine matrix
     columns = ['name', 'type', 'exit', 'dcm']
     thrusters_data = {}
@@ -79,9 +109,9 @@ def process_str_thrusters(str_thrusters):
     return thrusters_data
 
 # Process definition of an individual cluster.
-def process_cluster_def(str_cluster):
+def process_cluster_def(str_cluster: str) -> ClusterConfig:
     columns = ['name', 'exit', 'dcm']
-    cluster = {}
+    cluster: ClusterConfig = {}
     # Remove new line char (last char) and split at any space char.    
     str_list = str_cluster[:-1].split(' ')
     # Save name of cluster
@@ -103,7 +133,9 @@ def process_cluster_def(str_cluster):
     return cluster
 
 # Wrapper function
-def process_str_clusters(str_clusters):
+def process_str_clusters(
+    str_clusters: Iterable[str],
+) -> dict[str, ClusterConfig]:
     # dcm = direction cosine matrix
     columns = ['name', 'exit', 'dcm']
     clusters_data = {}
@@ -186,7 +218,15 @@ class VisitingVehicle(Vehicle):
             Plots visiting vehicle and all thrusters in RCS configuration.
     """
 
-    def print_info(self):
+    # Declared (without a value, so no class attribute is created) because the
+    # first assignment mypy sees is ``= None`` in set_thruster_config, which
+    # would otherwise pin the attribute to None and reject the cached mapping.
+    _thruster_id_map: dict[str, str] | None
+    # pandas' to_dict(orient='records') yields Hashable-keyed dicts, so the
+    # per-thruster metric records stay Any-valued at that boundary.
+    thruster_metrics: dict[str, Any] | None
+
+    def print_info(self) -> None:
         """
             Simple method to format printing of vehicle info.
 
@@ -205,7 +245,7 @@ class VisitingVehicle(Vehicle):
         logger.info('number of dual jet interactions: %s', self.jet_interactions)
         return
     
-    def set_stl(self):
+    def set_stl(self) -> None:
         """
             Reads in Vehicle surface mesh from STL file.
 
@@ -228,7 +268,7 @@ class VisitingVehicle(Vehicle):
         log_array_summary(logger, "vv_mesh_vectors", self.mesh.vectors)
         return
 
-    def get_thruster_cant(self, thruster_name):
+    def get_thruster_cant(self, thruster_name: str) -> float:
         """
             Finds the cant angle defined as angle from the LM surface tangent.
             Takes the thruster's DCM, undoes the frame transformation
@@ -278,7 +318,9 @@ class VisitingVehicle(Vehicle):
 
         return cant
 
-    def set_thruster_config(self, thruster_data=None):
+    def set_thruster_config(
+        self, thruster_data: dict[str, ThrusterConfig] | None = None
+    ) -> None:
         """
             Reads the thruster configuration file from the config.ini for the Visiting Vehicle and saves it as class members.
 
@@ -348,7 +390,7 @@ class VisitingVehicle(Vehicle):
 
         return
     
-    def change_cluster_config(self, x):
+    def change_cluster_config(self, x: float | NDArray[np.float64]) -> None:
         """
             Alters cluster configuration data using OpenMDAO inputs.
 
@@ -367,7 +409,7 @@ class VisitingVehicle(Vehicle):
             # print('cluster is', cluster)
             self.cluster_data[cluster]["exit"][0][0] = float(x)
 
-    def set_cluster_config(self):
+    def set_cluster_config(self) -> None:
         """
             Read in cluster configuration data from the provided file path.
             Gathers cluster configuration data for the Visiting Vehicle from a .dat file
@@ -404,7 +446,7 @@ class VisitingVehicle(Vehicle):
 
         return
 
-    def set_thruster_metrics(self):
+    def set_thruster_metrics(self) -> None:
         """
             Reads the csv thruster data file to gather thruster-specific performance parameters for the configuration
             and saves it in a list of dictionaries. These dictionaries are then saved into each thruster in the configuration.
@@ -459,7 +501,7 @@ class VisitingVehicle(Vehicle):
 
         return
 
-    def initiate_plume_mesh(self):
+    def initiate_plume_mesh(self) -> mesh.Mesh:
         """
             Helper method that reads in surface mesh for plume clone.
 
@@ -486,7 +528,7 @@ class VisitingVehicle(Vehicle):
     # single-digit clusters while additionally supporting multi-digit ones.
     _CLUSTER_ID_RE = re.compile(r'^(P\d+)')
 
-    def _cluster_id_for_thruster(self, thruster_id):
+    def _cluster_id_for_thruster(self, thruster_id: str) -> str:
         """Resolve the cluster a thruster belongs to from its id.
 
         The cluster association is encoded in the thruster naming convention:
@@ -517,8 +559,10 @@ class VisitingVehicle(Vehicle):
                 f"(available: {sorted(self.cluster_data)}).")
         return cluster_id
 
-    def transform_plume_mesh(self, thruster_id, plumeMesh,
-                             vv_orientation=None, vv_position=None):
+    def transform_plume_mesh(self, thruster_id: str, plumeMesh: mesh.Mesh,
+                             vv_orientation: ArrayLike | None = None,
+                             vv_position: Sequence[float] | NDArray[np.float64]
+                             | None = None) -> mesh.Mesh:
         """Place a plume mesh for a thruster, mutating it in place.
 
         Canonical owner of plume-placement geometry. Applies the legacy
@@ -616,7 +660,7 @@ class VisitingVehicle(Vehicle):
         plumeMesh.translate(self.thruster_data[thruster_id]['exit'][0])
         return plumeMesh
 
-    def get_thruster_id_map(self):
+    def get_thruster_id_map(self) -> dict[str, str]:
         """Return the cached JFH-index -> canonical-thruster-id mapping.
 
         The JFH references thrusters by 1-based numeric index into the thruster
@@ -637,7 +681,7 @@ class VisitingVehicle(Vehicle):
             self._thruster_id_map = cached
         return cached
 
-    def get_thruster_id(self, jfh_index):
+    def get_thruster_id(self, jfh_index: int | str) -> str:
         """Return the canonical thruster id for a 1-based JFH thruster index.
 
         Parameters
@@ -664,7 +708,7 @@ class VisitingVehicle(Vehicle):
                 f"JFH references thruster index {jfh_index} outside the "
                 f"configured range 1..{len(mapping)}.") from None
 
-    def initiate_plume_normal(self, thruster_id):
+    def initiate_plume_normal(self, thruster_id: str) -> list[list[float]]:
         """
             Collects plume normal vectors data for visualization.
 
@@ -704,7 +748,8 @@ class VisitingVehicle(Vehicle):
 
         return [X,Y,Z,U,V,W]
 
-    def plot_vv_and_thruster(self, plumeMesh, thruster_id, normal, i):
+    def plot_vv_and_thruster(self, plumeMesh: mesh.Mesh, thruster_id: str,
+                             normal: Sequence[Sequence[float]], i: int) -> int:
         """
             Plots Visiting Vehicle and plume cone for provided thruster id.
 
@@ -778,7 +823,7 @@ class VisitingVehicle(Vehicle):
         plt.savefig('img/frame' + str(index) + '.png')
         return i + 1
 
-    def check_thruster_configuration(self):
+    def check_thruster_configuration(self) -> None:
         """
             Plots visiting vehicle and all thrusters in RCS configuration.
 

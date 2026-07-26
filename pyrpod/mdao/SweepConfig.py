@@ -11,8 +11,15 @@
   Provides methods to aid optimization studies over sweeps of RCS thruster configurations.
 '''
 
+from __future__ import annotations
+
+from collections.abc import Sequence
+
 import numpy as np
 import copy
+
+from pyrpod.vehicle.LogisticsModule import LogisticsModule
+from pyrpod.vehicle.VisitingVehicle import ThrusterConfig
 
 class SweepCoordinates:
 
@@ -34,7 +41,11 @@ class SweepCoordinates:
     read_swept_coords(swept_configs = [{}, {}, ...])
         Prints to terminal the position of all thrusters for all the swept cofigurations.
     '''
-    def move_ring(config, xf):
+    # NOTE: declared without `self`; it is reached as an unbound
+    # SweepCoordinates.move_ring(config, xf). Adding self would change the
+    # signature, so `config` is annotated in place as the first positional.
+    def move_ring(config: dict[str, ThrusterConfig],  # type: ignore[misc]
+                  xf: float) -> dict[str, ThrusterConfig]:
         '''
             Change the location of the ring of thrusters to the position xf.
 
@@ -59,7 +70,8 @@ class SweepCoordinates:
         
         return new_config
     
-    def sweep_coords(self, config, x0, xf, dx):
+    def sweep_coords(self, config: dict[str, ThrusterConfig], x0: int,
+                     xf: int, dx: int) -> list[dict[str, ThrusterConfig]]:
         '''
             Given the range of coordinates and the step size, this method makes copies of the given configuration -
             each copy shifts the thrusters by dx and each copy is saved into an array.
@@ -99,7 +111,9 @@ class SweepCoordinates:
         
         return configs_swept_coords
 
-    def read_swept_coords(self, swept_configs):
+    def read_swept_coords(
+        self, swept_configs: Sequence[dict[str, ThrusterConfig]]
+    ) -> None:
         '''
             Prints to terminal the position of all thrusters for all the swept cofigurations.
 
@@ -167,7 +181,8 @@ class SweepDecelAngles:
         Prints to terminal the DCM of all thrusters for all the swept cofigurations
     '''
 
-    def __init__(self, config, thruster_groups):
+    def __init__(self, config: dict[str, ThrusterConfig],
+                 thruster_groups: dict[str, list[str]]) -> None:
         '''
             Simple constructor.
             Standardizes each thruster to normalize how cant sweeps are performed.
@@ -201,7 +216,9 @@ class SweepDecelAngles:
         #     standardized_thruster = self.standardize_thruster_normal(config[thruster])
         #     config[thruster] = standardized_thruster
 
-    def standardize_thruster_normal(self, thruster):
+    def standardize_thruster_normal(
+            self, thruster: ThrusterConfig
+    ) -> ThrusterConfig:
             '''
                 Method grabs a thruster's group and sets its DCM such that the thruster is pointed
                 directly opposite to the translational direction. 
@@ -228,7 +245,7 @@ class SweepDecelAngles:
             
             return thruster
 
-    def set_lm(self, LogisticsModule):
+    def set_lm(self, LogisticsModule: LogisticsModule) -> None:
         """
             Simple setter method to set VV/LM used in analysis.
 
@@ -243,7 +260,7 @@ class SweepDecelAngles:
         """
         self.lm = LogisticsModule
 
-    def categorize_rcs_groups(self):
+    def categorize_rcs_groups(self) -> None:
         '''
             Populates lists containing thrusters from several tgf groups and
             saves them as class members.
@@ -298,7 +315,7 @@ class SweepDecelAngles:
 
         return
 
-    def calculate_DCM(self, cant, thruster):
+    def calculate_DCM(self, cant: float, thruster: str) -> list[list[float]]:
         '''
             Given the cant angle:
             calculate the DCM to angle that thruster "cant" deg about z axis.
@@ -356,7 +373,7 @@ class SweepDecelAngles:
         
         return DCM.tolist()
     
-    def calculate_frame_rot(self, thruster_name):
+    def calculate_frame_rot(self, thruster_name: str) -> list[list[float]]:
         '''
             Given the thruster_name,
             determine the matrix by which to rotate the coordinate frame.
@@ -392,12 +409,17 @@ class SweepDecelAngles:
 
         return Tx.tolist()
     
-    def cant_decel_thrusters(self, cant):
+    def cant_decel_thrusters(
+        self, cant: float
+    ) -> dict[str, ThrusterConfig]:
         """
         """
         new_config = {}
 
-        Rz = self.calculate_DCM(cant)
+        # calculate_DCM takes (cant, thruster); this call omits the thruster
+        # and raises TypeError today. Flagged, not fixed -- supplying an
+        # argument would invent behavior (see deferred observations).
+        Rz = self.calculate_DCM(cant)  # type: ignore[call-arg]
 
         for thruster, thruster_info in self.config.items():
             new_thruster_info = thruster_info.copy()
@@ -411,7 +433,9 @@ class SweepDecelAngles:
         
         return new_config
 
-    def sweep_decel_thrusters_all(self, dcant):
+    def sweep_decel_thrusters_all(
+        self, dcant: int
+    ) -> list[dict[str, ThrusterConfig]]:
         '''
             Sweeps the given config by angle. Performed over min and max allowed. 
             All thrusters are canted simultaneously.
@@ -445,7 +469,11 @@ class SweepDecelAngles:
 
             # Rz = self.calculate_DCM(cant)
 
-            for thruster, thruster_info in config.items():
+            # `config` is undefined in this scope (flake8 also reports F821);
+            # this loop raises NameError. The block below it recomputes the
+            # swept configs from cant_decel_thrusters, so the method 'works'
+            # only because nothing reaches here first. Flagged, not fixed.
+            for thruster, thruster_info in config.items():  # type: ignore[name-defined]
                 new_thruster_info = thruster_info.copy()
                 
                 for match in self.lm.rcs_groups['neg_x']:
@@ -470,7 +498,9 @@ class SweepDecelAngles:
 
         return configs_swept_angles
     
-    def one_cant_decel_thrusters_all(self, config, cant):
+    def one_cant_decel_thrusters_all(
+        self, config: dict[str, ThrusterConfig], cant: float
+    ) -> dict[str, ThrusterConfig]:
         '''
             Sweeps the given config by angle. Performed over min and max allowed. 
             All thrusters are canted simultaneously.
@@ -511,7 +541,9 @@ class SweepDecelAngles:
 
         return new_config
     
-    def read_swept_angles(self, swept_configs):
+    def read_swept_angles(
+        self, swept_configs: Sequence[dict[str, ThrusterConfig]]
+    ) -> None:
         '''
             Prints to terminal the DCM of all thrusters for all the swept cofigurations.
             

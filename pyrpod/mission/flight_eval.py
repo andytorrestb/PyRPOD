@@ -1,5 +1,11 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any
+
 import pandas as pd
 import numpy as np
+from numpy.typing import NDArray
 
 from pyrpod.mission.SubModule import SubModule
 from pyrpod.mission.six_dof_dynamics import SixDOFDynamics
@@ -8,16 +14,23 @@ from pyrpod.util.io.fs import resolve_asset_path
 class FlightEvaluator(SubModule, SixDOFDynamics):
         # self.maneuvers = []
 
-    def load_plan(self):
+    # Set by read_flight_plan; None when the case configures no flight plan.
+    flight_plan: pd.DataFrame | None
+
+    def load_plan(self) -> None:
         # Parse CSV or other source
         pass
 
-    def execute(self, mission_planner):
+    # mission_planner is the owning MissionPlanner. It is typed Any rather than
+    # MissionPlanner because MissionPlanner imports FlightEvaluator at module
+    # level, so naming the class here -- with or without an import -- is a
+    # circular import. The method is a stub, so nothing is lost today.
+    def execute(self, mission_planner: Any) -> None:
         # Loop over maneuvers and update planner
         pass
 
 
-    def read_flight_plan(self, vv):
+    def read_flight_plan(self, vv: Any) -> None:
         """
             Reads in VV flight as specified using CSV format.
 
@@ -49,7 +62,7 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
 
         return
 
-    def calc_flight_performance(self):
+    def calc_flight_performance(self) -> None:
         """
             Calculates 6DOF performance for all firings specified in the flight plan.
 
@@ -61,7 +74,7 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
             -------
             None
         """
-        for firing in self.flight_plan.iterrows():
+        for firing in self.flight_plan.iterrows():  # type: ignore[union-attr]
 
                     # Convert firing data to numpy arra for easier data manipulation.
                     firing_array = np.array(firing[1])
@@ -89,7 +102,8 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
         return
 
 
-    def set_current_6dof_state(self, v = [0, 0, 0], w = [0,0,0]):
+    def set_current_6dof_state(self, v: Sequence[float] | NDArray[Any] = [0, 0, 0],
+                               w: Sequence[float] | NDArray[Any] = [0, 0, 0]) -> None:
         """
             Sets current inertial state for the VV. Can be done manually or read from flight plan.
 
@@ -110,7 +124,8 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
         self.w_current = np.array(w)
         return
 
-    def set_desired_6dof_state(self, v = [0, 0, 0], w = [0,0,0]):
+    def set_desired_6dof_state(self, v: Sequence[float] | NDArray[Any] = [0, 0, 0],
+                               w: Sequence[float] | NDArray[Any] = [0, 0, 0]) -> None:
         """
             Sets desired inertial state for the VV. Can be done manually or read from flight plan.
 
@@ -131,13 +146,13 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
         self.w_desired = np.array(w)
         return
 
-    def get_deltas(self):
+    def get_deltas(self) -> tuple[NDArray[Any], NDArray[Any]]:
         return self.v_desired - self.v_current, self.w_desired - self.w_current
 
 
     # calc_trans_performance is inherited from SixDOFDynamics
 
-    def calc_6dof_performance(self):
+    def calc_6dof_performance(self) -> None:
         """
             Wrapper method used to calculate performance for translation and rotational maneuvers.
 
@@ -185,7 +200,11 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
         #         self.calc_rot_performance(motion)
         return
 
-    def calc_flight_performance(self):
+    # Byte-for-byte duplicate of the definition above; this one unconditionally
+    # shadows it at class-creation time. Removing the earlier copy is a code
+    # change, which #103 excludes, so the shadowing is flagged here instead
+    # (see the report's deferred observations).
+    def calc_flight_performance(self) -> None:  # type: ignore[no-redef]
         """
             Calculates 6DOF performance for all firings specified in the flight plan.
 
@@ -197,7 +216,7 @@ class FlightEvaluator(SubModule, SixDOFDynamics):
             -------
             None
         """
-        for firing in self.flight_plan.iterrows():
+        for firing in self.flight_plan.iterrows():  # type: ignore[union-attr]
 
                     # Convert firing data to numpy arra for easier data manipulation.
                     firing_array = np.array(firing[1])

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pyrpod.vehicle.VisitingVehicle import VisitingVehicle
 from stl import mesh
 import numpy as np
@@ -6,6 +8,8 @@ from mpl_toolkits import mplot3d
 import os
 import configparser
 import logging
+from collections.abc import Sequence
+from typing import Any
 from pyrpod.util.io.fs import resolve_asset_path
 
 logger = logging.getLogger(__name__)
@@ -68,8 +72,16 @@ class LogisticsModule(VisitingVehicle):
             Plots all thruster working groups in the RCS configuration.
 
     """
+    # Declared (without a value, so no class attribute is created) to stop the
+    # ``= None`` sentinel in assign_thruster_groups from becoming the permanent
+    # inferred type. Annotated to the class contract -- a populated grouping
+    # dict -- because that None is a dead-end error sentinel that no consumer
+    # in this class (or anywhere else in pyrpod) checks for; see the ignore on
+    # the assignment itself.
+    rcs_groups: dict[str, list[str]]
+
     # TODO: write a custom COM of calculator for comparing RCS configurations (method)
-    def __init__(self, case_dir):
+    def __init__(self, case_dir: str) -> None:
         """
             Class responsible for handling visiting vehicle data.
 
@@ -94,7 +106,8 @@ class LogisticsModule(VisitingVehicle):
         # Delegate initialization to parent to avoid duplicating config reading
         super().__init__(case_dir)
 
-    def set_inertial_props(self, mass, height, radius):
+    def set_inertial_props(self, mass: float, height: float,
+                           radius: float) -> None:
         """
             Simple constructor used to establish LM inertial properties.
 
@@ -132,7 +145,7 @@ class LogisticsModule(VisitingVehicle):
 
         return
 
-    def add_thruster_performance(self, thrust_val, isp):
+    def add_thruster_performance(self, thrust_val: float, isp: float) -> None:
         """ WIP. Assigns thruster performance characteristics using thruster ID specified in TCD file."""
         # TODO: re-write method to read in data from CSV file. Do docstring after.
         # 1. mass, 2. chamber temp, 3. chamber pressure 4. velocity 5. impulse bit
@@ -141,7 +154,7 @@ class LogisticsModule(VisitingVehicle):
         self.isp = isp
         return
 
-    def calc_thruster_performance(self):
+    def calc_thruster_performance(self) -> list[dict[str, Any]]:
         """
         Calculates performance of each thruster fired individually.
 
@@ -188,7 +201,7 @@ class LogisticsModule(VisitingVehicle):
 
         return thruster_performance_data
 
-    def rcs_group_str_to_list(self, working_group):
+    def rcs_group_str_to_list(self, working_group: str) -> list[str]:
         """
             Helper method needed convert configuration data into a list.
 
@@ -220,12 +233,12 @@ class LogisticsModule(VisitingVehicle):
 
         return group_list
 
-    def print_rcs_groups(self):
+    def print_rcs_groups(self) -> None:
         """Simple method to format printing of RCS groups"""
         for group in self.rcs_groups:
             logger.info("%s %s", group, self.rcs_groups[group])
 
-    def assign_thrusters(self, group):
+    def assign_thrusters(self, group: str) -> None:
         """
             Assigns RCS thrusters to a specificed working group
 
@@ -250,7 +263,7 @@ class LogisticsModule(VisitingVehicle):
             self.rcs_groups[group].append(thruster)
         # print(self.rcs_groups)
 
-    def assign_thruster_groups(self):
+    def assign_thruster_groups(self) -> None:
         """Wrapper method for grouping RCS thrusters according to provided configuration data."""
 
         # Read in grouping configuration file.
@@ -259,7 +272,13 @@ class LogisticsModule(VisitingVehicle):
             config.read(resolve_asset_path(self.case_dir, 'tcd', self.config['tcd']['tgf']))
         except KeyError:
             # print("WARNING: Thruster Grouping File Not Set")
-            self.rcs_groups = None
+            # Pre-existing "no thruster grouping file" sentinel. Nothing reads
+            # it back as None -- print_rcs_groups, plot_thruster_group and
+            # calc_overshoot_v_range all index rcs_groups unguarded -- so
+            # widening the attribute to dict|None would only relocate this one
+            # report to those five call sites. Guarding them is a behavior
+            # change and out of scope for #103.
+            self.rcs_groups = None  # type: ignore[assignment]
             return
 
 
@@ -285,7 +304,9 @@ class LogisticsModule(VisitingVehicle):
         decel_thruster_name = next(iter(self.rcs_groups['neg_x']))
         self.decel_cant = self.get_thruster_cant(decel_thruster_name)
 
-    def plot_active_thrusters(self, active_thrusters, working_group, normals):
+    def plot_active_thrusters(self, active_thrusters: mesh.Mesh,
+                              working_group: str,
+                              normals: Sequence[Sequence[Sequence[float]]]) -> None:
         """
             Plots active thrusters for a specified working group.
 
@@ -339,7 +360,7 @@ class LogisticsModule(VisitingVehicle):
         # Save to file
         plt.savefig('img/frame' + str(working_group) + '.png')
 
-    def plot_thruster_group(self, working_group):
+    def plot_thruster_group(self, working_group: str) -> None:
         """
             Wrapper method to plot active thrusters in a given working group. Name is confusing need to revise.
 
@@ -371,11 +392,17 @@ class LogisticsModule(VisitingVehicle):
         if not os.path.isdir('stl/groups/'):
             os.system('mkdir stl/groups')
 
-        active_thrusters.save('stl/groups/' + working_group + '.stl')
+        # active_thrusters is still None when the working group is empty; the
+        # legacy code has always assumed at least one thruster per group and
+        # would raise AttributeError otherwise. Adding a guard would change
+        # runtime behavior, so the two uses below are flagged, not fixed.
+        active_thrusters.save(  # type: ignore[union-attr]
+            'stl/groups/' + working_group + '.stl')
 
-        self.plot_active_thrusters(active_thrusters, working_group, normals)
+        self.plot_active_thrusters(
+            active_thrusters, working_group, normals)  # type: ignore[arg-type]
 
-    def check_thruster_groups(self):
+    def check_thruster_groups(self) -> None:
         """
             Plots all thruster working groups in the RCS configuration.
 
@@ -389,14 +416,20 @@ class LogisticsModule(VisitingVehicle):
             # print()
         return
 
-    def calc_overshoot_v_range(self, v_ida, r_o):
+    def calc_overshoot_v_range(self, v_ida: float,
+                               r_o: float) -> list[np.floating[Any]]:
         mass = self.mass
         # print(len(self.rcs_groups['neg_x']))
 
         F_decel = 0
         for thruster in self.rcs_groups['neg_x']:
             thruster_type = self.thruster_data[thruster]['type'][0]
-            thruster_metrics = self.thruster_metrics[thruster_type]
+            # vv.thruster_metrics is a real Optional -- set_thruster_metrics
+            # leaves it None when the case has no [tcd] tdf, and callers such
+            # as PlumeStrikeEstimationStudy check for that. This path never
+            # did, and adding a check here would change runtime behavior.
+            thruster_metrics = self.thruster_metrics[  # type: ignore[index]
+                thruster_type]
 
             cant = self.decel_cant
 
@@ -412,6 +445,7 @@ class LogisticsModule(VisitingVehicle):
         logger.debug("vo_range: %s", vo_range)
         return vo_range
 
-    def debug_decel_calc_example(self, F_decel, v_o, vo_range):
+    def debug_decel_calc_example(self, F_decel: float, v_o: float,
+                                 vo_range: Sequence[float]) -> None:
         # Replaces ad-hoc prints with a single debug helper (optional usage)
         logger.debug("F_decel=%s, v_o=%s, vo_range=%s", F_decel, v_o, vo_range)

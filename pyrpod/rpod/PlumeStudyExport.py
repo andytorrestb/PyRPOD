@@ -4,8 +4,10 @@ This isolates file-writing and optional figure saving so the planner
 can delegate those responsibilities and remain focused on simulation
 logic.
 """
+from __future__ import annotations
+
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import matplotlib.pyplot as plt
 
@@ -17,7 +19,7 @@ class PlumeStudyExport:
     (matching the existing usage in the codebase).
     """
 
-    def __init__(self, environment):
+    def __init__(self, environment: Any) -> None:
         self.environment = environment
 
     def _ensure_parent(self, path: str) -> None:
@@ -25,7 +27,7 @@ class PlumeStudyExport:
         if parent:
             os.makedirs(parent, exist_ok=True)
 
-    def export_firing(self, vv_mesh, path_to_stl: str) -> None:
+    def export_firing(self, vv_mesh: Any, path_to_stl: str) -> None:
         """Save the provided mesh to disk, ensuring directory exists.
 
         Keeps behavior identical to previous calls to ``mesh.save(path)``
