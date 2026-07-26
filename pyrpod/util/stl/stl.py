@@ -83,6 +83,46 @@ def transform_mesh_from_file(input_file, output_file, scale, translate):
     print(f"Mesh saved to {output_file}")
 
 
+def compose_meshes(meshes):
+    """Concatenate an ordered collection of numpy-stl meshes into a single mesh.
+
+    This is the canonical home for generic mesh composition used by the RPOD
+    visualization pipeline (visiting-vehicle body + active plume cones +
+    optional cluster geometry). It replaces repeated incremental
+    ``np.concatenate`` calls that were duplicated across the study methods.
+
+    Parameters
+    ----------
+    meshes : iterable of stl.mesh.Mesh
+        Ordered meshes to concatenate. Ordering is preserved exactly in the
+        output and all face data is concatenated in a single operation.
+
+    Returns
+    -------
+    stl.mesh.Mesh
+        A single mesh containing every input mesh's faces, in order. When
+        exactly one mesh is supplied it is returned unchanged (the same
+        object), matching the legacy incremental-composition behavior. The
+        input meshes are never mutated.
+
+    Raises
+    ------
+    ValueError
+        If no meshes are supplied, or if any supplied element is ``None``.
+        Composition never silently returns ``None`` nor drops a component.
+    """
+    meshes = list(meshes)
+    if not meshes:
+        raise ValueError("compose_meshes requires at least one mesh; got none.")
+    if any(m is None for m in meshes):
+        raise ValueError(
+            "compose_meshes received a None mesh; every component must be a "
+            "valid stl.mesh.Mesh.")
+    if len(meshes) == 1:
+        return meshes[0]
+    return mesh.Mesh(np.concatenate([m.data for m in meshes]))
+
+
 def convert_stl_to_vtk(surface, out_path, *, filename=None, cellData=None):
     """
     Convert an STL mesh (or path to an STL) to a VTK unstructured grid file.
@@ -150,7 +190,17 @@ import json
 from stl import mesh
 import numpy as np
 
-def transform_mesh(input_file, output_file, scale, translate):
+def _transform_stl_file_cli(input_file, output_file, scale, translate):
+    """Scale + translate an STL file in place from the command line.
+
+    This is the file-based command-line helper invoked from ``__main__``. It
+    is deliberately kept distinct from the reusable, in-memory
+    ``transform_mesh(mesh_obj, ...)`` API above: the two previously shared the
+    name ``transform_mesh``, and the later (file-based) definition silently
+    shadowed the mesh-object API on import, breaking callers that passed a mesh
+    plus ``rotation_matrix``/``scale_factor``. Only the CLI entry point below
+    uses this function.
+    """
     # Load the mesh from the file
     model = mesh.Mesh.from_file(input_file)
 
@@ -182,7 +232,7 @@ if __name__ == "__main__":
     translate = config.get("translate", [0.0, 0.0, 0.0])
 
     # Transform the mesh using the configuration
-    transform_mesh(
+    _transform_stl_file_cli(
         input_file=input_file,
         output_file=output_file,
         scale=scale,
