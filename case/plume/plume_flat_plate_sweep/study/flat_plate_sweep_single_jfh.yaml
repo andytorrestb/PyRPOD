@@ -1,0 +1,89 @@
+# PyRPOD prescribed plume-validation study: flat-plate sweep as ONE JFH.
+#
+# Same physics, same poses and same normalization as flat_plate_sweep.yaml --
+# 19 approach angles x 5 stand-off distances against the 8 m x 8 m plate of
+# case/plume/plume_flat_plate_sweep -- but executed as a SINGLE case driven by
+# a SINGLE Jet Firing History holding all 95 firings (sweep.mode: single_jfh).
+#
+# What that buys, over the per-case form:
+#   * one strike run, so every firing's results come from the same pipeline
+#     invocation and the same cumulative accumulation;
+#   * one results/strikes/firing-<i>.vtu series (i = 0 .. 94) that ParaView
+#     can scrub as a time sequence, matching the case's own sweep convention;
+#   * a sweep ENVELOPE in the metadata: per component, the worst pressure and
+#     shear any pose produced on any face, the accumulated heat-flux load, the
+#     coverage (unique struck faces / swept affected area).
+#
+# n_firings stays the count per POSE, so this file and flat_plate_sweep.yaml
+# differ only in `mode` and the output names: 19 x 5 poses x 1 firing = a JFH
+# of exactly 95 entries.
+#
+# Run it:
+#     from pyrpod.mdao.TradeStudy import TradeStudy
+#     study = TradeStudy.from_config(
+#         'case/plume/plume_flat_plate_sweep/study/'
+#         'flat_plate_sweep_single_jfh.yaml')
+#     results = study.run()          # -> ParameterSweepStudy
+#     study.validation_study.envelope['plate']
+
+study:
+  name: cai2016_flat_plate_sweep_single_jfh
+  description: >-
+    Flat-plate plume impingement over 19 approach angles and 5 stand-off
+    distances, executed as one 95-firing Jet Firing History.
+  case_dir: ..
+  output_dir: ../results/studies/flat_plate_sweep_single_jfh
+
+thruster:
+  id: T1
+
+plume_model:
+  name: SimplifiedGasKinetics
+  parameters:
+    gas: argon
+    speed_ratio_S0: 2.0
+    stagnation_temperature_K: 200.0
+    nozzle_diameter_m: 1.0
+
+target:
+  geometry_id: flat_plate_transformed.stl
+  reference_point: [0.0, 0.0, 0.0]
+  normal: [0.0, 0.0, 1.0]
+  tangent: [1.0, 0.0, 0.0]
+  components:
+    - name: plate
+      selector: all
+
+sweep:
+  # One Jet Firing History for the whole sweep.
+  mode: single_jfh
+  plate_angles_deg: [-90.0, -80.0, -70.0, -60.0, -50.0, -40.0, -30.0, -20.0,
+                     -10.0, 0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0,
+                     80.0, 90.0]
+  source_distances: [2.0, 4.0, 6.0, 8.0, 10.0]
+  # Entries contributed by each pose; the history holds 19 * 5 * 1 = 95.
+  n_firings: 1
+  firing_duration_s: 1.0
+  thrusters: [1]
+
+loads:
+  moment_reference_point: [0.0, 0.0, 0.0]
+  normalization:
+    reference_area: 64.0
+    reference_length: 4.0
+    dynamic_pressure: 1.1044652197738332
+    reference_heat_flux: 637.3520362956127
+
+output:
+  vtk:
+    enabled: true
+  summary:
+    csv: sweep_results.csv
+    metadata: sweep_metadata.json
+  plots:
+    enabled: true
+
+metadata:
+  coordinate_system: >-
+    case global frame; plate in the X-Y plane centered at the origin,
+    plume source swept in the X-Z plane

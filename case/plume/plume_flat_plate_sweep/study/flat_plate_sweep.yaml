@@ -1,0 +1,76 @@
+# PyRPOD prescribed plume-validation study: flat-plate ANGLE x DISTANCE sweep.
+#
+# The multi-angle / multi-distance analog of flat_plate_baseline.yaml: the
+# stationary 8 m x 8 m plate of case/plume/plume_flat_plate_sweep is struck
+# from 19 approach angles (-90 .. +90 deg in 10 deg steps, 0 = head-on) at 5
+# stand-off distances (L/D in {2, 4, 6, 8, 10}, D = 1 m) -- 95 cases, one
+# firing each, matching the committed sweep JFH of that case.
+#
+# Run it:
+#     from pyrpod.mdao.TradeStudy import TradeStudy
+#     study = TradeStudy.from_config(
+#         'case/plume/plume_flat_plate_sweep/study/flat_plate_sweep.yaml')
+#     results = study.run()
+#     study.plot()          # optional trend figures
+#
+# Expect ~10368 faces x 95 poses; with VTK output enabled this writes one
+# .vtu per case under results/studies/flat_plate_sweep/cases/.
+
+study:
+  name: cai2016_flat_plate_sweep
+  description: >-
+    Flat-plate plume impingement swept over 19 approach angles and 5
+    stand-off distances, Cai 2016 Section 4 conditions.
+  case_dir: ..
+  output_dir: ../results/studies/flat_plate_sweep
+
+thruster:
+  id: T1
+
+plume_model:
+  name: SimplifiedGasKinetics
+  parameters:
+    gas: argon
+    speed_ratio_S0: 2.0
+    stagnation_temperature_K: 200.0
+    nozzle_diameter_m: 1.0
+
+target:
+  geometry_id: flat_plate_transformed.stl
+  reference_point: [0.0, 0.0, 0.0]
+  normal: [0.0, 0.0, 1.0]
+  tangent: [1.0, 0.0, 0.0]
+  components:
+    - name: plate
+      selector: all
+
+sweep:
+  plate_angles_deg: [-90.0, -80.0, -70.0, -60.0, -50.0, -40.0, -30.0, -20.0,
+                     -10.0, 0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0,
+                     80.0, 90.0]
+  source_distances: [2.0, 4.0, 6.0, 8.0, 10.0]
+  n_firings: 1
+  firing_duration_s: 1.0
+  thrusters: [1]
+
+loads:
+  moment_reference_point: [0.0, 0.0, 0.0]
+  normalization:
+    reference_area: 64.0
+    reference_length: 4.0
+    dynamic_pressure: 1.1044652197738332
+    reference_heat_flux: 637.3520362956127
+
+output:
+  vtk:
+    enabled: true
+  summary:
+    csv: sweep_results.csv
+    metadata: sweep_metadata.json
+  plots:
+    enabled: true
+
+metadata:
+  coordinate_system: >-
+    case global frame; plate in the X-Y plane centered at the origin,
+    plume source swept in the X-Z plane
