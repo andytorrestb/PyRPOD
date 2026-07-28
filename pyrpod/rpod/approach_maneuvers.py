@@ -21,6 +21,38 @@ class ApproachInputs:
     group: str = "neg_x"  # thruster group for decel
 
 
+def validate_n_firings(value: Any) -> int:
+    """Validate a requested firing count.
+
+    ``n_firings`` is the EXACT number of entries a Jet Firing History will
+    contain, so it must be a positive integer: zero, negative, fractional and
+    non-numeric values are rejected rather than coerced or silently ignored.
+
+    Parameters
+    ----------
+    value : Any
+        The requested firing count.
+
+    Returns
+    -------
+    int
+        The validated count.
+
+    Raises
+    ------
+    ValueError
+        If the value is not a positive integer.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"n_firings must be a positive integer, got {value!r}")
+    if isinstance(value, float) and not float(value).is_integer():
+        raise ValueError(f"n_firings must be a positive integer, got {value!r}")
+    n_firings = int(value)
+    if n_firings < 1:
+        raise ValueError(f"n_firings must be a positive integer, got {value!r}")
+    return n_firings
+
+
 def choose_dt_from_mib(vv: Any, group: str, time_multiplier: float = 1.0) -> float:
     """Default time step based on min impulse bit and a multiplier.
 
@@ -46,14 +78,28 @@ def compute_1d_approach(
     grouping: Any,
     cant_rad: float,
     dt_strategy: Dict[str, Any] | None = None,
+    n_firings: int | None = None,
 ) -> Dict[str, np.ndarray]:
     """Discrete 1D deceleration under constant-thrust firings.
 
     Returns dict with arrays: t, x, y, z, v, dv, mass, dm_total, rot
     No file I/O; callers can serialize via rpod.io.write_jfh.
+
+    Parameters
+    ----------
+    n_firings : int, optional
+        When given, the returned arrays hold EXACTLY this many entries: the
+        deceleration is simulated until the requested number of firings has
+        been produced. If the approach reaches its target velocity in fewer
+        firings than requested, the mismatch is raised rather than silently
+        ignored -- ``n_firings`` is a hard count, not a hint. When omitted
+        (the default) the simulation runs to completion exactly as before.
     """
     v_ida, v_o, r_o = inputs.v_ida, inputs.v_o, inputs.r_o
     group = inputs.group
+
+    if n_firings is not None:
+        n_firings = validate_n_firings(n_firings)
 
     # Pre-compute thrust/mass-flow characteristics
     m_dot_sum = grouping.calc_m_dot_sum(group)
@@ -97,6 +143,10 @@ def compute_1d_approach(
     rot.append(rot_mat)
 
     while dv_req > 0:
+        # A requested firing count is exact: stop as soon as the arrays hold
+        # n_firings entries (one JFH entry per entry).
+        if n_firings is not None and len(t) >= n_firings:
+            break
         m_o = mass[-1]
         mass.append(m_o - dm_firing)
 
@@ -118,6 +168,12 @@ def compute_1d_approach(
         if len(t) > 100000:
             # guard against runaway loops
             break
+
+    if n_firings is not None and len(t) != n_firings:
+        raise ValueError(
+            f"requested n_firings={n_firings} but the approach reached its "
+            f"target velocity after {len(t)} firings; reduce n_firings or "
+            "adjust the approach conditions (v_o, v_ida, time step)")
 
     return {
         "t": np.array(t),
