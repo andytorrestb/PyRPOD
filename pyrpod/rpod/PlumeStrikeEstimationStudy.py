@@ -37,6 +37,7 @@ from pyrpod.util.math.transform import rotation_matrix_from_vectors
 from pyrpod.rpod.approach_maneuvers import (
     ApproachInputs,
     compute_1d_approach,
+    validate_n_firings,
 )
 from pyrpod.rpod.io import ensure_results_dirs, write_jfh
 from pyrpod.rpod.PlumeStudyExport import PlumeStudyExport
@@ -1411,6 +1412,15 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
     def print_jfh_1d_approach_n_fire(self, v_ida: float, v_o: float,
                                      r_o: float, n_firings: int,
                                      trade_study: bool = False) -> None:
+        """Write a 1D-approach JFH holding EXACTLY n_firings entries.
+
+        ``n_firings`` is the number of entries written to the Jet Firing
+        History. It is validated up front and enforced by
+        ``compute_1d_approach``; previously it was accepted and then ignored,
+        so the file's length was whatever the deceleration simulation
+        happened to produce.
+        """
+        n_firings = validate_n_firings(n_firings)
         # Delegate to approach_maneuvers.compute_1d_approach and rpod.io.write_jfh
         tm = self.calc_time_multiplier(v_ida, v_o, r_o)
         inputs = ApproachInputs(v_ida=float(v_ida), v_o=float(v_o), r_o=float(r_o), group='neg_x')
@@ -1430,6 +1440,7 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
             grouping=_GroupingAdapter(self),
             cant_rad=self.vv.decel_cant,
             dt_strategy={"multiplier": tm},
+            n_firings=n_firings,
         )
 
         r = [results["x"], results["y"], results["z"]]
@@ -1448,6 +1459,10 @@ class PlumeStrikeEstimationStudy (MissionPlanner):
         gen_start = time.perf_counter()
         os.makedirs(os.path.dirname(jfh_path), exist_ok=True)
         write_jfh(t_values, r, rot, jfh_path, mode="1d")
+        if len(t_values) != n_firings:
+            raise ValueError(
+                f"JFH {jfh_path} was written with {len(t_values)} entries but "
+                f"{n_firings} firings were requested")
         _log_jfh_generation_complete(jfh_path, len(t_values), gen_start)
 
 

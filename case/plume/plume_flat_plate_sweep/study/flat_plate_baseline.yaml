@@ -1,0 +1,86 @@
+# PyRPOD prescribed plume-validation study: flat-plate BASELINE case.
+#
+# One head-on firing of the Cai 2016 round argon jet (D = 1 m, S0 = 2.0,
+# T0 = 200 K, Tw = 300 K, fully diffuse) against the flat 8 m x 8 m plate of
+# case/plume/plume_flat_plate_sweep, with the plume source at L = 4D on the
+# plate normal. This is the single-pose reference point of the sweep in
+# flat_plate_sweep.yaml.
+#
+# Run it:
+#     from pyrpod.mdao.TradeStudy import TradeStudy
+#     results = TradeStudy.from_config(
+#         'case/plume/plume_flat_plate_sweep/study/flat_plate_baseline.yaml'
+#     ).run()
+#
+# The case's own config.ini still owns every asset (STL, TCF, TDF, plume
+# model and gating geometry); this file adds only the study layer.
+
+study:
+  name: cai2016_flat_plate_baseline
+  description: >-
+    Head-on flat-plate plume impingement at L/D = 4, Cai 2016 Section 4
+    conditions, run through the prescribed trade-study API.
+  case_dir: ..
+  output_dir: ../results/studies/flat_plate_baseline
+
+# One thruster, recorded explicitly. It must exist in the case's TCF.
+thruster:
+  id: T1
+
+# The only plume model this workflow supports.
+plume_model:
+  name: SimplifiedGasKinetics
+  parameters:
+    # Recorded for provenance; the values themselves are read from the
+    # case's thruster definition file (tcd/tdf.csv, thruster type ARG).
+    gas: argon
+    speed_ratio_S0: 2.0
+    stagnation_temperature_K: 200.0
+    nozzle_diameter_m: 1.0
+
+target:
+  geometry_id: flat_plate_transformed.stl
+  # Plate center; the sweep arc and the angle convention are built about it.
+  reference_point: [0.0, 0.0, 0.0]
+  # Outward normal (toward the plume-source side) and in-plane tilt axis.
+  normal: [0.0, 0.0, 1.0]
+  tangent: [1.0, 0.0, 0.0]
+  components:
+    - name: plate
+      selector: all
+
+sweep:
+  plate_angles_deg: [0.0]
+  source_distances: [4.0]
+  # Exactly this many entries are written to the case's Jet Firing History.
+  n_firings: 1
+  firing_duration_s: 1.0
+  thrusters: [1]
+
+loads:
+  # Moments are reported about this user-defined point (the plate center).
+  moment_reference_point: [0.0, 0.0, 0.0]
+  normalization:
+    # Plate area 8 m x 8 m and semi-length H0 = 4 m.
+    reference_area: 64.0
+    reference_length: 4.0
+    # Cai's normalization, derived from the case's own TDF entry:
+    #   q_dyn  = n0*m*U0^2/2 with n0 = 1e20 m^-3, U0 = 577.0684534784414 m/s,
+    #            m = (R_universal / R_specific) / N_A, R_specific = 208.13
+    #   q_heat = n0*m*U0^3/2
+    dynamic_pressure: 1.1044652197738332
+    reference_heat_flux: 637.3520362956127
+
+output:
+  vtk:
+    enabled: true
+  summary:
+    csv: case_results.csv
+    metadata: study_metadata.json
+  plots:
+    enabled: false
+
+metadata:
+  coordinate_system: >-
+    case global frame; plate in the X-Y plane centered at the origin,
+    plume source on the +Z side

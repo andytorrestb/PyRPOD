@@ -1,0 +1,69 @@
+# PyRPOD prescribed plume-validation study: CYLINDER target, one firing.
+#
+# The same study machinery as the flat-plate examples, pointed at the curved,
+# closed target of case/plume/plume_cylinder_sweep (radius 2 m, axis along X
+# spanning x in [-7, 0], centroid (-3.5, 0, 0)). It exists to keep the study
+# architecture honest -- nothing in it assumes a flat plate -- and to be the
+# place quantitative cylinder reference data plugs into later, through the
+# same generic reference-comparison interface the plate cases use.
+#
+# NOTE: as in the case itself, the cylinder results are a PIPELINE SMOKE
+# CASE, not a validated physical answer: no cylinder reference data exists
+# yet. No normalization inputs are supplied, so coefficients are correctly
+# reported as unavailable rather than invented.
+
+study:
+  name: cylinder_baseline
+  description: >-
+    Single head-on firing against the cylinder target; architecture check and
+    future home of quantitative cylinder validation.
+  case_dir: ..
+  output_dir: ../results/studies/cylinder_baseline
+
+thruster:
+  id: T1
+
+plume_model:
+  name: SimplifiedGasKinetics
+  parameters:
+    gas: argon
+    speed_ratio_S0: 2.0
+    stagnation_temperature_K: 200.0
+    nozzle_diameter_m: 1.0
+
+target:
+  geometry_id: cylinder.stl
+  # Cylinder centroid; the sweep arc is built about it, exactly as the
+  # case's own jfh/generate_cylinder_sweep_jfh.py does.
+  reference_point: [-3.5, 0.0, 0.0]
+  normal: [0.0, 0.0, 1.0]
+  tangent: [1.0, 0.0, 0.0]
+  components:
+    - name: cylinder
+      selector: all
+
+sweep:
+  plate_angles_deg: [0.0]
+  # Orbit radius; larger than the ~4.03 m bounding sphere of the target.
+  source_distances: [6.0]
+  n_firings: 1
+  firing_duration_s: 1.0
+  thrusters: [1]
+
+loads:
+  moment_reference_point: [-3.5, 0.0, 0.0]
+  # No normalization block: coefficients are reported as unavailable.
+
+output:
+  vtk:
+    enabled: true
+  summary:
+    csv: case_results.csv
+    metadata: study_metadata.json
+  plots:
+    enabled: false
+
+metadata:
+  coordinate_system: >-
+    case global frame; cylinder axis along X, plume source swept in the X-Z
+    plane about the cylinder centroid

@@ -47,6 +47,40 @@ PyRPOD utilizies scientific libraries such as NumPy, SciPy, Matplotlib, and SymP
    python -m pytest tests/rpod          # or just point pytest at a directory/file directly
    ```
 
+## Plume Validation Trade Studies
+
+Prescribed plume/target validation sweeps (fixed target, engineer-placed
+firing poses, swept approach angle and source distance) run through a
+package-level API on top of any existing case:
+
+```python
+from pyrpod.mdao.TradeStudy import TradeStudy
+
+study = TradeStudy.from_config(
+    'case/plume/plume_flat_plate_sweep/study/flat_plate_baseline.yaml')
+results = study.run()          # per-component force, moment, center of
+                               # pressure, peak loads, VTK paths, CSV + JSON
+```
+
+A YAML study configuration adds the sweep, the exact JFH firing count, the
+moment reference point and the coefficient normalization on top of the case's
+own `config.ini`, which keeps owning every asset. `sweep.mode` picks how the
+sweep is decomposed — `per_case` gives every angle-distance combination its
+own Jet Firing History, `single_jfh` runs the whole sweep as one history with
+a single strike series and a sweep-wide load envelope. Results can be compared
+against independently generated reference data (DSMC, analytical,
+experimental — the interface does not care which) through a generic
+comparison layer.
+
+See [docs/plume_validation_study.md](docs/plume_validation_study.md) for the
+architecture, the configuration schema, the exact meaning of `n_firings`, the
+force / moment / center-of-pressure definitions, the result schema, the
+reference-data format, and the known limitations. Worked examples:
+[`flat_plate_baseline.yaml`](case/plume/plume_flat_plate_sweep/study/flat_plate_baseline.yaml),
+[`flat_plate_sweep.yaml`](case/plume/plume_flat_plate_sweep/study/flat_plate_sweep.yaml)
+and its single-history form
+[`flat_plate_sweep_single_jfh.yaml`](case/plume/plume_flat_plate_sweep/study/flat_plate_sweep_single_jfh.yaml).
+
 ## Test Reporting
 
 Test information lives in two places, and the split is deliberate:
