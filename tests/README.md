@@ -32,9 +32,9 @@ Source of truth for the metadata below: [`test_manifest.yaml`](test_manifest.yam
 
 | Metric | Count |
 | --- | --- |
-| Manifest entries | 93 |
-| Collected by pytest (files) | 44 |
-| Collected by pytest (test cases) | 204 |
+| Manifest entries | 100 |
+| Collected by pytest (files) | 51 |
+| Collected by pytest (test cases) | 334 |
 | Manual verification scripts | 42 |
 | Placeholder tests | 12 |
 | Blocked tests | 5 |
@@ -71,12 +71,19 @@ separately).
 | --- | --- | --- | --- | --- |
 | [`mdao_unit_test_01.py`](mdao/mdao_unit_test_01.py) | 1 | Placeholder MDAO unit test; the test body returns immediately and asserts nothing. | `placeholder` | — |
 | [`mdao_unit_test_02.py`](mdao/mdao_unit_test_02.py) | 1 | Intended to build an array of cant-angle-swept thruster configurations (symmetric pitch/yaw canting) and visualize each sweep step. The entire body is currently commented out, so the test asserts nothing. | `placeholder` | — |
+| [`mdao_unit_test_03.py`](mdao/mdao_unit_test_03.py) | 23 | Unit tests for prescribed firing generation and the exact meaning of n_firings: invalid counts are rejected, N requested firings produce exactly N JFH entries (read back through JetFiringHistory), an explicit firing list that disagrees with n_firings is an error, a whole-sweep sequence holds exactly poses x n_firings pose-tagged entries, the generated pose convention reproduces the committed flat-plate sweep JFH, and the dynamics-driven approach honors an exact count. | `implemented` | — |
+| [`mdao_unit_test_04.py`](mdao/mdao_unit_test_04.py) | 20 | Unit tests for per-component surface-load integration on meshes with analytically known loading: pressure and shear force integration, moments about a user-defined reference point, center of pressure (recovered, moment-consistent, and unavailable for zero-load and near-cancellation cases), coefficient calculation and omission, and component face selection. | `implemented` | — |
+| [`mdao_unit_test_05.py`](mdao/mdao_unit_test_05.py) | 32 | Unit tests for the YAML study configuration: the committed flat-plate examples parse, paths resolve against the configuration file, validation rejects an unsupported plume model, an unknown sweep mode, invalid firing counts, mismatched firing lists and bad geometry or normalization inputs, the per-pose n_firings semantics hold in both sweep modes, and the case's own config.ini keeps parsing unchanged. | `implemented` | — |
+| [`mdao_unit_test_06.py`](mdao/mdao_unit_test_06.py) | 22 | Unit tests for the generic external-reference comparison (absolute and relative error, normalized RMSE, peak error, integrated-load error, center-of-pressure displacement; CSV / JSON / YAML datasets compared identically regardless of origin; unmatched cases and missing quantities reported rather than fabricated) and for the structured result schema's CSV and JSON serialization. | `implemented` | — |
 
 #### Integration
 
 | Test file | Cases | Description | Development status | Reference |
 | --- | --- | --- | --- | --- |
 | [`mdao_integration_test_01.py`](mdao/mdao_integration_test_01.py) | 1 | Placeholder MDAO integration test; the test body returns immediately and asserts nothing. | `placeholder` | — |
+| [`mdao_integration_test_02.py`](mdao/mdao_integration_test_02.py) | 8 | Baseline flat-plate case run end to end through the package-level TradeStudy.from_config API: one case with exactly one JFH entry, the standard per-face strike VTK at the advertised path, CSV and JSON summaries with full provenance, physically consistent head-on loads, available coefficients, and agreement of the integrated normal load with the independent Cai 2016 exact reference. | `implemented` | Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Eq. 15 |
+| [`mdao_integration_test_03.py`](mdao/mdao_integration_test_03.py) | 13 | Multi-angle / multi-distance flat-plate sweep through the trade-study API (a reduced subset of the committed sweep configuration): one result per angle-distance case, mirror symmetry in +/- angle, load decay with distance, center-of-pressure travel, agreement with the independent Cai 2016 reference through the generic comparison interface, per-case VTK isolation, optional trend plots, and the same machinery running on the cylinder target with coefficients correctly unavailable. | `implemented` | Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Eq. 15 |
+| [`mdao_integration_test_04.py`](mdao/mdao_integration_test_04.py) | 12 | The single-history sweep engine (sweep.mode: single_jfh): engine dispatch from the configuration, exactly one Jet Firing History holding poses x n_firings entries, one result record per firing keyed to its pose, per-firing equivalence with the per-case engine, a single results/strikes VTK series, the per-component sweep envelope (absent rather than fabricated without the full pipeline), and the same independent Cai 2016 reference comparison. | `implemented` | Cai 2016, Aerospace 3(4), 43, doi:10.3390/aerospace3040043, Eq. 15 |
 
 #### Verification
 
