@@ -1,0 +1,327 @@
+"""
+Shared runtime for prescribed plume/target validation studies.
+
+Both study styles -- :class:`pyrpod.mdao.plume_validation.PlumeValidationStudy`
+(one Jet Firing History per angle-distance case) and
+:class:`pyrpod.mdao.parameter_sweep.ParameterSweepStudy` (one history spanning
+the whole sweep) -- need exactly the same plumbing: build the case objects,
+precompute the target geometry, read back a generated JFH, run the strike
+calculation, and turn one firing's per-face arrays into result records. That
+plumbing lives here so the two classes stay siblings with no duplicated logic
+and no inheritance between them.
+
+Nothing in this module decides HOW a sweep is decomposed into histories; that
+is the studies' own business.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
+
+import numpy as np
+from numpy.typing import NDArray
+
+from pyrpod.mdao.firing_plan import Firing
+from pyrpod.mdao.study_config import StudyConfig
+from pyrpod.mdao.study_results import CaseResult, code_version
+from pyrpod.mdao.surface_loads import (
+    face_areas,
+    flow_directions,
+    integrate_component_loads,
+    select_component_faces,
+)
+from pyrpod.mission import MissionEnvironment
+from pyrpod.plume.PlumeStrikeCalculator import (
+    compute_face_centroids,
+    compute_plume_strikes,
+)
+from pyrpod.rpod import JetFiringHistory, PlumeStrikeEstimationStudy
+from pyrpod.util.io.fs import ensure_dir
+from pyrpod.vehicle import TargetVehicle, VisitingVehicle
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "CaseAssets",
+    "TargetGeometry",
+    "build_case_results",
+    "component_envelope",
+    "compute_strikes",
+    "load_case_assets",
+    "read_generated_jfh",
+    "study_provenance",
+    "utc_timestamp",
+]
+
+#: Cumulative per-face fields the strike pipeline accumulates across a single
+#: Jet Firing History. They are a sweep ENVELOPE only when one history spans
+#: the sweep; with one history per case they simply restate that case.
+CUMULATIVE_FIELDS = ("cum_strikes", "max_pressures", "max_shears",
+                     "cum_heat_flux_load")
+
+
+@dataclass
+class CaseAssets:
+    """The existing PyRPOD objects a study runs on."""
+
+    target_vehicle: Any
+    visiting_vehicle: Any
+    environment: Any
+
+
+@dataclass
+class TargetGeometry:
+    """Per-face target geometry, computed once and reused by every firing."""
+
+    mesh: Any
+    centroids: NDArray[np.float64]
+    normals: NDArray[np.float64]
+    areas: NDArray[np.float64]
+    n_faces: int
+    components: list[tuple[str, NDArray[np.int64]]]
+
+    @classmethod
+    def from_config(cls, config: StudyConfig, mesh: Any) -> "TargetGeometry":
+        centroids = compute_face_centroids(mesh.vectors)
+        n_faces = int(len(mesh.vectors))
+        components = [
+            (component.name,
+             select_component_faces(component, centroids, n_faces))
+            for component in config.target.components
+        ]
+        return cls(mesh=mesh, centroids=centroids,
+                   normals=mesh.get_unit_normals(),
+                   areas=face_areas(mesh.vectors), n_faces=n_faces,
+                   components=components)
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def load_case_assets(config: StudyConfig) -> CaseAssets:
+    """Construct the existing PyRPOD case objects for a study.
+
+    Fails early and specifically when the case does not support the study
+    workflow: an unsupported plume model, or a configured thruster id that
+    the case's thruster configuration file does not define.
+    """
+    case_dir = config.case_dir
+
+    target_vehicle = TargetVehicle.TargetVehicle(case_dir)
+    target_vehicle.set_stl()
+
+    visiting_vehicle = VisitingVehicle.VisitingVehicle(case_dir)
+    visiting_vehicle.set_thruster_config()
+    visiting_vehicle.set_thruster_metrics()
+
+    thruster_id = config.thruster_id
+    if thruster_id is not None:
+        available = list(getattr(visiting_vehicle, "thruster_data", {}) or {})
+        if thruster_id not in available:
+            raise ValueError(
+                f"thruster.id {thruster_id!r} is not configured in the case's "
+                f"thruster configuration file; available: {available}")
+
+    environment = MissionEnvironment.MissionEnvironment(case_dir)
+    configured_model = environment.config["pm"]["kinetics"]
+    if configured_model != "Simplified":
+        raise ValueError(
+            f"case {case_dir!r} configures plume kinetics "
+            f"{configured_model!r}; this study workflow requires the "
+            "SimplifiedGasKinetics model ([pm] kinetics = Simplified)")
+    return CaseAssets(target_vehicle=target_vehicle,
+                      visiting_vehicle=visiting_vehicle,
+                      environment=environment)
+
+
+def study_provenance(config: StudyConfig, geometry: TargetGeometry,
+                     **extra: Any) -> dict[str, Any]:
+    """Study-level provenance recorded in the metadata document."""
+    provenance = config.provenance()
+    provenance.update({
+        "code_version": code_version(
+            os.path.dirname(os.path.abspath(__file__))),
+        "mesh_faces": geometry.n_faces,
+        "geometry_id": config.target.geometry_id,
+        "sweep_mode": config.sweep.mode,
+        "n_cases": config.n_cases,
+        "n_firings_per_pose": config.sweep.n_firings,
+        "total_firings": config.sweep.total_firings,
+        "components": [name for name, _ in geometry.components],
+        "known_limitations": [
+            "plume shadowing, occlusion and back-facing geometry are not "
+            "modeled (existing pipeline face-selection behavior)",
+        ],
+    })
+    provenance.update(extra)
+    return provenance
+
+
+def read_generated_jfh(config: StudyConfig, jfh_name: str) -> Any:
+    """Load a generated JFH through the normal JetFiringHistory reader.
+
+    The JFH object keeps the case's ``config.ini`` (so every other setting is
+    the case's own) but resolves its JFH asset from the study's own output
+    tree, which is where generated firing histories live. ``case_dir`` is the
+    documented asset-resolution root of ``JetFiringHistory``, so pointing it
+    at the study output directory is exactly its intended use.
+    """
+    jfh = JetFiringHistory.JetFiringHistory(config.case_dir)
+    jfh.case_dir = config.output_dir.rstrip("\\/") + os.sep
+    if not jfh.config.has_section("jfh"):
+        jfh.config.add_section("jfh")
+    jfh.config.set("jfh", "jfh", jfh_name)
+    jfh.read_jfh()
+    if getattr(jfh, "JFH", None) is None:
+        raise ValueError(
+            f"failed to read generated JFH {jfh_name!r} from "
+            f"{os.path.join(config.output_dir, 'jfh')}")
+    return jfh
+
+
+def compute_strikes(config: StudyConfig, assets: CaseAssets,
+                    geometry: TargetGeometry, jfh: Any,
+                    output_root: str) -> tuple[dict[str, dict[str, Any]],
+                                               list[str]]:
+    """Run one Jet Firing History through the plume-strike calculation.
+
+    With VTK output enabled the full
+    ``PlumeStrikeEstimationStudy.jfh_plume_strikes()`` pipeline runs, writing
+    the standard per-face strike files to
+    ``<output_root>/results/strikes/firing-<i>.vtu``; the target vehicle's
+    output root is redirected there for the duration of the run so studies
+    that execute several histories cannot overwrite one another's artifacts.
+    With VTK disabled the pipeline's own per-firing core runs instead --
+    identical numbers, no files.
+
+    Returns
+    -------
+    (dict, list of str)
+        The per-firing field dictionary keyed ``'1'``..``'N'``, and the
+        per-firing VTK paths (empty when VTK output is disabled).
+    """
+    if not config.output.write_vtk:
+        firing_data: dict[str, dict[str, Any]] = {}
+        for index in range(len(jfh.JFH)):
+            step = {"thrusters": jfh.JFH[index]["thrusters"],
+                    "xyz": np.array(jfh.JFH[index]["xyz"]),
+                    "dcm": np.array(jfh.JFH[index]["dcm"]),
+                    "t": float(jfh.JFH[index]["t"])}
+            result = compute_plume_strikes(
+                geometry.mesh, geometry.normals, assets.visiting_vehicle,
+                step, assets.environment, face_centroids=geometry.centroids)
+            firing_data[str(index + 1)] = dict(result)
+        return firing_data, []
+
+    study = PlumeStrikeEstimationStudy.PlumeStrikeEstimationStudy(
+        assets.environment)
+    study.study_init(jfh, assets.target_vehicle, assets.visiting_vehicle)
+
+    target_vehicle = assets.target_vehicle
+    original_case_dir = target_vehicle.case_dir
+    redirected = output_root.rstrip("\\/") + os.sep
+    ensure_dir(os.path.join(redirected, "results", "strikes"))
+    try:
+        target_vehicle.case_dir = redirected
+        firing_data = study.jfh_plume_strikes()
+    finally:
+        target_vehicle.case_dir = original_case_dir
+
+    vtk_paths = [os.path.join(redirected, "results", "strikes",
+                              f"firing-{index}.vtu")
+                 for index in range(len(jfh.JFH))]
+    return firing_data, vtk_paths
+
+
+def build_case_results(config: StudyConfig, geometry: TargetGeometry,
+                       firing: Firing, per_face: dict[str, Any], *,
+                       case_id: str, firing_id: int,
+                       plate_angle_deg: float, source_distance: float,
+                       jfh_path: str, vtk_path: str | None,
+                       code_version_id: str, timestamp: str,
+                       ) -> list[CaseResult]:
+    """Integrate one firing's per-face fields into one record per component."""
+    flow = flow_directions(geometry.centroids, firing.position)
+    records: list[CaseResult] = []
+    for component_name, face_indices in geometry.components:
+        loads = integrate_component_loads(
+            component_name=component_name,
+            face_indices=face_indices,
+            centroids=geometry.centroids, unit_normals=geometry.normals,
+            areas=geometry.areas,
+            pressures=per_face["pressures"],
+            shear_stresses=per_face["shear_stress"],
+            heat_fluxes=per_face["heat_flux_rate"],
+            strikes=per_face["strikes"],
+            moment_reference_point=config.loads.moment_reference_point,
+            flow_unit_vectors=flow,
+            normalization=config.loads.normalization)
+
+        records.append(CaseResult.from_loads(
+            loads,
+            study_name=config.study_name,
+            case_id=case_id,
+            firing_id=firing_id,
+            geometry_id=config.target.geometry_id,
+            mesh_faces=geometry.n_faces,
+            coordinate_system=config.coordinate_system,
+            units=dict(config.units),
+            plume_source_position=[float(v) for v in firing.position],
+            plume_source_orientation=[
+                float(v) for v in np.asarray(firing.dcm).ravel()],
+            target_normal=[float(v) for v in config.target.normal],
+            target_tangent=[float(v) for v in config.target.tangent],
+            target_reference_point=[
+                float(v) for v in config.target.reference_point],
+            plate_angle_deg=float(plate_angle_deg),
+            source_distance=float(source_distance),
+            firing_duration_s=float(firing.duration_s),
+            thrusters=[int(t) for t in firing.thrusters],
+            plume_model=config.plume_model,
+            plume_model_parameters=dict(config.plume_model_parameters),
+            vtk_path=vtk_path,
+            jfh_path=jfh_path,
+            config_path=config.source_path,
+            case_dir=os.path.abspath(config.case_dir),
+            code_version=code_version_id,
+            generated_at=timestamp))
+    return records
+
+
+def component_envelope(geometry: TargetGeometry,
+                       cumulative: dict[str, Any],
+                       ) -> dict[str, dict[str, float]]:
+    """Worst-case per-face statistics over a whole firing history.
+
+    Only meaningful when ONE history spans the sweep: the strike pipeline's
+    cumulative arrays then hold the maximum pressure and shear any pose
+    produced on each face, the summed heat-flux load, and the number of times
+    each face was struck. Reported per component so a multi-component target
+    keeps them separate.
+    """
+    envelope: dict[str, dict[str, float]] = {}
+    for component_name, face_indices in geometry.components:
+        indices = np.asarray(face_indices, dtype=np.int64)
+        areas = geometry.areas[indices]
+        strikes = np.asarray(cumulative["cum_strikes"], dtype=float)[indices]
+        pressures = np.asarray(cumulative["max_pressures"],
+                               dtype=float)[indices]
+        shears = np.asarray(cumulative["max_shears"], dtype=float)[indices]
+        heat_load = np.asarray(cumulative["cum_heat_flux_load"],
+                               dtype=float)[indices]
+        struck = strikes > 0.0
+        envelope[component_name] = {
+            "max_pressure": float(np.max(pressures)),
+            "max_shear_stress": float(np.max(shears)),
+            "max_heat_flux_load": float(np.max(heat_load)),
+            "total_strike_events": float(np.sum(strikes)),
+            "unique_struck_faces": int(np.count_nonzero(struck)),
+            "swept_affected_area": float(np.sum(areas[struck])),
+            "component_area": float(np.sum(areas)),
+        }
+    return envelope
