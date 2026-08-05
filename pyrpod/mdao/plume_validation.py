@@ -53,7 +53,11 @@ from pyrpod.mdao.reference_data import (
 )
 from pyrpod.mdao.study_config import StudyConfig, SweepPose
 from pyrpod.mdao.study_results import StudyResults
-from pyrpod.mdao.study_runtime import CaseAssets, TargetGeometry
+from pyrpod.mdao.study_runtime import (
+    CaseAssets,
+    TargetGeometry,
+    study_plots_for,
+)
 from pyrpod.util.io.fs import ensure_dir
 
 logger = logging.getLogger(__name__)
@@ -247,18 +251,16 @@ class PlumeValidationStudy:
 
     # ---------------------------------------------------------------- plots
     def plot(self, results: StudyResults | None = None) -> list[str]:
-        """Generate the optional parameter-sweep trend plots.
+        """Generate the optional trend plots for this study.
 
         Plot generation is entirely optional -- automated tests never require
-        it -- and is imported lazily so a headless run pays no matplotlib
-        cost unless plots were asked for.
+        it -- and the plotting modules are imported lazily so a headless run
+        pays no matplotlib cost unless plots were asked for.
         """
-        from pyrpod.mdao import study_plots
-
         results = results or self.results
         if results is None:
             raise RuntimeError("run() the study before plotting results")
         plot_dir = os.path.join(self.config.output_dir,
                                 self.config.output.plots_subdir)
-        return study_plots.plot_sweep_trends(results, plot_dir,
-                                             comparison=self.comparison)
+        return study_plots_for(self.config, results, plot_dir,
+                               comparison=self.comparison)

@@ -228,15 +228,13 @@ class ParameterSweepStudy:
 
     # ---------------------------------------------------------------- plots
     def plot(self, results: StudyResults | None = None) -> list[str]:
-        """Generate the optional parameter-sweep trend plots."""
-        from pyrpod.mdao import study_plots
-
+        """Generate the optional trend plots for this sweep."""
         results = results or self.results
         if results is None:
             raise RuntimeError("run() the study before plotting results")
         plot_dir = os.path.join(self.config.output_dir,
                                 self.config.output.plots_subdir)
-        return study_plots.plot_sweep_trends(results, plot_dir,
+        return study_runtime.study_plots_for(self.config, results, plot_dir,
                                              comparison=self.comparison)
 
 

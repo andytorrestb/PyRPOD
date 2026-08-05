@@ -61,6 +61,7 @@ __all__ = [
     "knudsen_metadata",
     "load_case_assets",
     "read_generated_jfh",
+    "study_plots_for",
     "study_provenance",
     "utc_timestamp",
 ]
@@ -435,6 +436,58 @@ def build_case_results(config: StudyConfig, geometry: TargetGeometry,
             generated_at=timestamp,
             **knudsen))
     return records
+
+
+def study_plots_for(config: StudyConfig, results: Any, out_dir: str,
+                    comparison: Any = None) -> list[str]:
+    """Generate whichever optional figures this study's sweep calls for.
+
+    Both engines plot identically, so the choice lives here rather than in
+    either of them (and never in the :class:`TradeStudy` façade):
+
+    * the angle-sweep trends of :mod:`pyrpod.mdao.study_plots` are always
+      produced, plus the study-vs-reference figure when a comparison exists;
+    * an OFFSET sweep additionally gets the panel-local trends of
+      :mod:`pyrpod.mdao.panel_plots`;
+    * per-case panel pressure maps are drawn when
+      ``output.plots.per_case_distribution`` is set AND the distributions
+      they read were exported.
+
+    Both plotting modules are imported lazily, so a study that asks for no
+    plots never imports matplotlib.
+    """
+    from pyrpod.mdao import study_plots
+
+    written = list(study_plots.plot_sweep_trends(results, out_dir,
+                                                 comparison=comparison))
+
+    sweeps_offsets = (config.sweep.source_axis_mode == "parallel_to_normal"
+                      or len(config.sweep.source_offsets_u) > 1
+                      or len(config.sweep.source_offsets_v) > 1)
+    if not sweeps_offsets:
+        return written
+
+    from pyrpod.mdao import panel_plots
+
+    written.extend(panel_plots.plot_offset_sweep_trends(results, out_dir))
+
+    if config.output.write_distribution_plots:
+        if not config.output.write_surface_distribution:
+            logger.warning(
+                "output.plots.per_case_distribution is set but "
+                "output.surface_distribution.enabled is not; the per-case "
+                "pressure maps are drawn from the exported distributions, "
+                "so none were produced")
+            return written
+        seen: set[str] = set()
+        for case in results.cases:
+            if case.case_id in seen:
+                continue
+            seen.add(case.case_id)
+            path = panel_plots.plot_panel_pressure_for_case(case, out_dir)
+            if path:
+                written.append(path)
+    return written
 
 
 def component_envelope(geometry: TargetGeometry,
