@@ -32,6 +32,7 @@ from pyrpod.mdao.surface_loads import (
     face_areas,
     flow_directions,
     integrate_component_loads,
+    project_to_panel_frame,
     select_component_faces,
 )
 from pyrpod.mission import MissionEnvironment
@@ -39,6 +40,7 @@ from pyrpod.plume.PlumeStrikeCalculator import (
     compute_face_centroids,
     compute_plume_strikes,
 )
+from pyrpod.plume.gas_kinetics_models import KINETICS_DISABLED, kinetics_key_for
 from pyrpod.rpod import JetFiringHistory, PlumeStrikeEstimationStudy
 from pyrpod.util.io.fs import ensure_dir
 from pyrpod.vehicle import TargetVehicle, VisitingVehicle
@@ -107,8 +109,15 @@ def load_case_assets(config: StudyConfig) -> CaseAssets:
     """Construct the existing PyRPOD case objects for a study.
 
     Fails early and specifically when the case does not support the study
-    workflow: an unsupported plume model, or a configured thruster id that
-    the case's thruster configuration file does not define.
+    workflow: gas kinetics disabled, or a configured thruster id that the
+    case's thruster configuration file does not define.
+
+    The study's ``plume_model`` selects which collisionless model computes
+    the plume field. It is applied by setting the environment's IN-MEMORY
+    ``[pm] kinetics`` key, which is the one input both strike paths read, so
+    the selection reaches the calculation itself rather than only the
+    metadata. The case's ``config.ini`` on disk is never modified, and a
+    study naming the model its case already configures changes nothing.
     """
     case_dir = config.case_dir
 
@@ -128,12 +137,21 @@ def load_case_assets(config: StudyConfig) -> CaseAssets:
                 f"thruster configuration file; available: {available}")
 
     environment = MissionEnvironment.MissionEnvironment(case_dir)
-    configured_model = environment.config["pm"]["kinetics"]
-    if configured_model != "Simplified":
+    configured = environment.config["pm"]["kinetics"]
+    if configured == KINETICS_DISABLED:
         raise ValueError(
-            f"case {case_dir!r} configures plume kinetics "
-            f"{configured_model!r}; this study workflow requires the "
-            "SimplifiedGasKinetics model ([pm] kinetics = Simplified)")
+            f"case {case_dir!r} sets [pm] kinetics = {KINETICS_DISABLED}, "
+            "which disables the gas-kinetics surface loads; a validation "
+            "study needs pressure, shear and heat flux, so configure "
+            "'Simplified' or 'Collisionless'")
+
+    selected = kinetics_key_for(config.plume_model)
+    if selected != configured:
+        logger.info("Study selects plume model %s: [pm] kinetics %r -> %r "
+                    "for this run (case config.ini is not modified)",
+                    config.plume_model, configured, selected)
+        environment.config["pm"]["kinetics"] = selected
+
     return CaseAssets(target_vehicle=target_vehicle,
                       visiting_vehicle=visiting_vehicle,
                       environment=environment)
@@ -142,6 +160,7 @@ def load_case_assets(config: StudyConfig) -> CaseAssets:
 def study_provenance(config: StudyConfig, geometry: TargetGeometry,
                      **extra: Any) -> dict[str, Any]:
     """Study-level provenance recorded in the metadata document."""
+    u_hat, v_hat, n_hat = config.target.local_basis()
     provenance = config.provenance()
     provenance.update({
         "code_version": code_version(
@@ -153,9 +172,23 @@ def study_provenance(config: StudyConfig, geometry: TargetGeometry,
         "n_firings_per_pose": config.sweep.n_firings,
         "total_firings": config.sweep.total_firings,
         "components": [name for name, _ in geometry.components],
+        "panel_basis": {
+            "u": [float(value) for value in u_hat],
+            "v": [float(value) for value in v_hat],
+            "n": [float(value) for value in n_hat],
+            "origin": [float(value)
+                       for value in config.target.reference_point],
+            "convention": "u = target tangent (longitudinal), "
+                          "v = n x u (transverse), n = target normal "
+                          "(toward the plume source); u x v = n. "
+                          "normal_force = -F.n is positive INTO the panel.",
+        },
         "known_limitations": [
             "plume shadowing, occlusion and back-facing geometry are not "
             "modeled (existing pipeline face-selection behavior)",
+            "the plume models are collisionless: any configured Knudsen "
+            "number is derived metadata and never enters the solution",
+            "no DSMC data is read, written or compared here",
         ],
     })
     provenance.update(extra)
@@ -238,15 +271,44 @@ def compute_strikes(config: StudyConfig, assets: CaseAssets,
     return firing_data, vtk_paths
 
 
+def knudsen_metadata(config: StudyConfig,
+                     source_distance: float) -> dict[str, Any]:
+    """Derived Knudsen fields for one case, or empty when unconfigured.
+
+    Kn is METADATA: it is computed from the mean free path the configuration
+    supplied and the reference length it selected, and no part of the
+    analytical plume solution reads it back. When the study has no
+    ``knudsen`` block every Knudsen field is simply left unset.
+    """
+    spec = config.knudsen
+    if spec is None:
+        return {}
+    return {
+        "knudsen_number": spec.knudsen_number(source_distance),
+        "mean_free_path": spec.mean_free_path_m,
+        "knudsen_reference_length": spec.reference_length_for(source_distance),
+        "knudsen_definition": spec.definition,
+    }
+
+
 def build_case_results(config: StudyConfig, geometry: TargetGeometry,
                        firing: Firing, per_face: dict[str, Any], *,
                        case_id: str, firing_id: int,
                        plate_angle_deg: float, source_distance: float,
                        jfh_path: str, vtk_path: str | None,
                        code_version_id: str, timestamp: str,
+                       surface_distribution_paths: dict[str, str] | None = None,
                        ) -> list[CaseResult]:
-    """Integrate one firing's per-face fields into one record per component."""
+    """Integrate one firing's per-face fields into one record per component.
+
+    Each record also carries the resultants projected on the target's
+    surface-local basis (normal force, local moments, panel-local center of
+    pressure) and, when configured, the derived Knudsen metadata.
+    """
     flow = flow_directions(geometry.centroids, firing.position)
+    u_hat, v_hat, n_hat = config.target.local_basis()
+    knudsen = knudsen_metadata(config, source_distance)
+    distributions = surface_distribution_paths or {}
     records: list[CaseResult] = []
     for component_name, face_indices in geometry.components:
         loads = integrate_component_loads(
@@ -264,6 +326,7 @@ def build_case_results(config: StudyConfig, geometry: TargetGeometry,
 
         records.append(CaseResult.from_loads(
             loads,
+            panel=project_to_panel_frame(loads, u_hat, v_hat, n_hat),
             study_name=config.study_name,
             case_id=case_id,
             firing_id=firing_id,
@@ -280,16 +343,21 @@ def build_case_results(config: StudyConfig, geometry: TargetGeometry,
                 float(v) for v in config.target.reference_point],
             plate_angle_deg=float(plate_angle_deg),
             source_distance=float(source_distance),
+            source_offset_u=float(firing.source_offset_u),
+            source_offset_v=float(firing.source_offset_v),
+            source_axis_mode=firing.source_axis_mode,
             firing_duration_s=float(firing.duration_s),
             thrusters=[int(t) for t in firing.thrusters],
             plume_model=config.plume_model,
             plume_model_parameters=dict(config.plume_model_parameters),
             vtk_path=vtk_path,
             jfh_path=jfh_path,
+            surface_distribution_path=distributions.get(component_name),
             config_path=config.source_path,
             case_dir=os.path.abspath(config.case_dir),
             code_version=code_version_id,
-            generated_at=timestamp))
+            generated_at=timestamp,
+            **knudsen))
     return records
 
 
