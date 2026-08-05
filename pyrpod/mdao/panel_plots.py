@@ -138,7 +138,9 @@ def plot_panel_pressure(local_u: Sequence[float], local_v: Sequence[float],
 
     axes.set_xlabel("panel-local u (m), longitudinal")
     axes.set_ylabel("panel-local v (m), transverse")
-    axes.set_title(title, fontsize=10)
+    # On the figure, not the axes: a wide panel is drawn to scale, so an
+    # axes title would run under the colorbar.
+    figure.suptitle(title, fontsize=9, y=0.98)
     axes.set_aspect("equal", adjustable="box")
     axes.legend(fontsize=8, loc="upper right")
     figure.savefig(path, dpi=200, bbox_inches="tight")
@@ -176,9 +178,10 @@ def plot_panel_pressure_for_case(case: CaseResult, out_dir: str,
     centerline = (case.source_offset_u, case.source_offset_v) \
         if case.source_axis_mode == "parallel_to_normal" else (None, None)
 
-    title = (f"Panel-local pressure -- {case.case_id} "
-             f"({case.model_variant}, L = {case.source_distance:g} m, "
-             f"u = {case.source_offset_u:g} m, v = {case.source_offset_v:g} m)")
+    title = (f"Panel-local pressure -- {case.case_id}\n"
+             f"{case.model_variant}, L = {case.source_distance:g} m, "
+             f"source u = {case.source_offset_u:g} m, "
+             f"v = {case.source_offset_v:g} m")
     return plot_panel_pressure(
         local_u, local_v, pressure,
         os.path.join(out_dir, f"panel_pressure_{case.case_id}.png"),
