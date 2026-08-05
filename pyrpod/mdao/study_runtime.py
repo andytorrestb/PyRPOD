@@ -28,6 +28,10 @@ from numpy.typing import NDArray
 from pyrpod.mdao.firing_plan import Firing
 from pyrpod.mdao.study_config import StudyConfig
 from pyrpod.mdao.study_results import CaseResult, code_version
+from pyrpod.mdao.surface_distribution import (
+    distribution_rows,
+    write_surface_distribution,
+)
 from pyrpod.mdao.surface_loads import (
     face_areas,
     flow_directions,
@@ -53,6 +57,8 @@ __all__ = [
     "build_case_results",
     "component_envelope",
     "compute_strikes",
+    "export_surface_distributions",
+    "knudsen_metadata",
     "load_case_assets",
     "read_generated_jfh",
     "study_provenance",
@@ -283,12 +289,82 @@ def knudsen_metadata(config: StudyConfig,
     spec = config.knudsen
     if spec is None:
         return {}
-    return {
-        "knudsen_number": spec.knudsen_number(source_distance),
+    metadata: dict[str, Any] = {
         "mean_free_path": spec.mean_free_path_m,
-        "knudsen_reference_length": spec.reference_length_for(source_distance),
         "knudsen_definition": spec.definition,
     }
+    if (spec.reference_mode == "source_distance"
+            and not np.isfinite(source_distance)):
+        # An explicitly prescribed firing carries no swept distance (recorded
+        # as NaN), so a distance-referenced Kn does not exist for it. The
+        # mean free path and the definition still describe the study; the
+        # number itself is left unset rather than invented.
+        logger.debug("Knudsen number omitted for a firing with no swept "
+                     "source distance (reference_length: source_distance)")
+        return metadata
+    metadata["knudsen_number"] = spec.knudsen_number(source_distance)
+    metadata["knudsen_reference_length"] = spec.reference_length_for(
+        source_distance)
+    return metadata
+
+
+def export_surface_distributions(config: StudyConfig,
+                                 geometry: TargetGeometry, firing: Firing,
+                                 per_face: dict[str, Any], *, case_id: str,
+                                 firing_id: int, plate_angle_deg: float,
+                                 source_distance: float,
+                                 output_dir: str) -> dict[str, str]:
+    """Write one panel-local distribution CSV per component, if enabled.
+
+    An ADDITION to the VTK export, never a replacement: the same native
+    per-face values, in the target's own (u, v) coordinates, with no
+    interpolation. Returns ``{component name: csv path}``, empty when
+    ``output.surface_distribution.enabled`` is false.
+    """
+    if not config.output.write_surface_distribution:
+        return {}
+
+    u_hat, v_hat, n_hat = config.target.local_basis()
+    reference = config.target.reference_point
+    knudsen = knudsen_metadata(config, source_distance)
+    ensure_dir(output_dir)
+
+    paths: dict[str, str] = {}
+    for component_name, face_indices in geometry.components:
+        rows = distribution_rows(
+            face_indices, geometry.centroids, geometry.areas,
+            per_face["pressures"], per_face["shear_stress"],
+            per_face["heat_flux_rate"], per_face.get("strikes"),
+            reference_point=reference, u_hat=u_hat, v_hat=v_hat)
+        metadata: dict[str, Any] = {
+            "study_name": config.study_name,
+            "case_id": case_id,
+            "component": component_name,
+            "firing_id": firing_id,
+            "geometry_id": config.target.geometry_id,
+            "coordinate_system": config.coordinate_system,
+            "panel_basis": {
+                "origin": [float(value) for value in reference],
+                "u": [float(value) for value in u_hat],
+                "v": [float(value) for value in v_hat],
+                "n": [float(value) for value in n_hat],
+            },
+            "plate_angle_deg": float(plate_angle_deg),
+            "source_distance": float(source_distance),
+            "source_offset_u": float(firing.source_offset_u),
+            "source_offset_v": float(firing.source_offset_v),
+            "source_axis_mode": firing.source_axis_mode,
+            "plume_source_position": [float(v) for v in firing.position],
+            "plume_model": config.plume_model,
+            "plume_model_parameters": dict(config.plume_model_parameters),
+            "firing_duration_s": float(firing.duration_s),
+        }
+        metadata.update(knudsen)
+
+        name = f"{case_id}_{component_name}_firing{firing_id:03d}.csv"
+        paths[component_name] = write_surface_distribution(
+            os.path.join(output_dir, name), rows, metadata)
+    return paths
 
 
 def build_case_results(config: StudyConfig, geometry: TargetGeometry,

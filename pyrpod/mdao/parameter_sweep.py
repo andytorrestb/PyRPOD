@@ -148,16 +148,28 @@ class ParameterSweepStudy:
         timestamp = study_runtime.utc_timestamp()
         version = str(results.provenance.get("code_version", "unknown"))
 
+        distribution_dir = os.path.join(
+            config.output_dir, config.output.surface_distribution_subdir)
+
         for firing_index, firing in enumerate(firings):
             per_face = firing_data[str(firing_index + 1)]
+            plate_angle_deg = _pose_value(firing.plate_angle_deg)
+            source_distance = _pose_value(firing.source_distance)
+            distributions = study_runtime.export_surface_distributions(
+                config, geometry, firing, per_face, case_id=self.case_id,
+                firing_id=firing_index + 1,
+                plate_angle_deg=plate_angle_deg,
+                source_distance=source_distance,
+                output_dir=distribution_dir)
             results.cases.extend(study_runtime.build_case_results(
                 config, geometry, firing, per_face,
                 case_id=self.case_id, firing_id=firing_index + 1,
-                plate_angle_deg=_pose_value(firing.plate_angle_deg),
-                source_distance=_pose_value(firing.source_distance),
+                plate_angle_deg=plate_angle_deg,
+                source_distance=source_distance,
                 jfh_path=jfh_path,
                 vtk_path=vtk_paths[firing_index] if vtk_paths else None,
-                code_version_id=version, timestamp=timestamp))
+                code_version_id=version, timestamp=timestamp,
+                surface_distribution_paths=distributions))
 
         # 4. The sweep envelope, which only a shared history can produce.
         last = firing_data[str(len(firings))]
