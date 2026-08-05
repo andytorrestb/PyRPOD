@@ -207,6 +207,36 @@ Give each copy its own `study.name` and `output_dir`. Exactly one
 reference-length mode may be given; supplying both, or neither, is a
 configuration error.
 
+## Independent Cai 2016 reference (optional)
+
+`cai2016_reference.py` evaluates the **exact** Cai 2016 surface solution
+(`pyrpod/plume/CaiImpingement2016.py`, Eqs. 9-14) at the *same* face
+centroids and exports the *same* distribution schema, so the two can be
+diffed column for column.
+
+It is an **independent analytical reference generator, not a plume-model
+backend**: PyRPOD never imports it, `PlumeStrikeCalculator` cannot reach it,
+and it takes no part in any study run. It implements normal incidence only
+(Cai's `alpha_0 = 90 deg`), which is exactly the `parallel_to_normal` pose.
+
+```bash
+cd case/plume/iss_panel_thesis
+
+# Evaluate at the committed mesh for the baseline pose
+python cai2016_reference.py --distance 4.0
+
+# Diff against a distribution a study already exported
+python cai2016_reference.py --distance 4.0 --compare \
+  results/studies/baseline_simplified/cases/case000_modelSimplified_L4_u0_v0/distributions/case000_modelSimplified_L4_u0_v0_panel_firing001.csv
+```
+
+On the committed mesh at L = 4 m the peak values agree to **2.8 % in
+pressure, 3.4 % in shear and 7.8 % in heat flux**. That residual is the
+Maxwellian wall chain (plume field -> `LocalFieldState` -> Shen formulas)
+against a direct integration of the wall fluxes — the same documented gap
+`tests/mdao/mdao_integration_test_02.py` already checks for integrated
+loads. It is not a defect in either path.
+
 ## See also
 
 - `docs/plume_validation_study.md` — the study framework, the YAML schema,
