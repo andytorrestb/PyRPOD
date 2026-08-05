@@ -687,8 +687,9 @@ class KnudsenSpec:
                     f"<number>, got {symbolic!r}")
             mode, reference_length = "source_distance", None
         else:
+            # The XOR check above guarantees `explicit` is not None here.
             try:
-                reference_length = float(explicit)
+                reference_length = float(explicit)  # type: ignore[arg-type]
             except (TypeError, ValueError) as exc:
                 raise StudyConfigError(
                     "knudsen.reference_length_m must be a positive finite "

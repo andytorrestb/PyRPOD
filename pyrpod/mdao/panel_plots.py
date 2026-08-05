@@ -50,6 +50,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402  (backend must be set first)
 import matplotlib.tri as mtri    # noqa: E402
+from matplotlib.cm import ScalarMappable  # noqa: E402
 
 from pyrpod.mdao.study_plots import PALETTE  # noqa: E402
 from pyrpod.mdao.study_results import CaseResult, StudyResults  # noqa: E402
@@ -115,6 +116,7 @@ def plot_panel_pressure(local_u: Sequence[float], local_v: Sequence[float],
     use_contours = (u.size >= MIN_FACES_FOR_CONTOURS
                     and float(np.ptp(u)) > 0.0 and float(np.ptp(v)) > 0.0
                     and float(np.ptp(p)) > 0.0)
+    mappable: ScalarMappable
     if use_contours:
         triangulation = mtri.Triangulation(u, v)
         mappable = axes.tricontourf(triangulation, p, levels=24,
